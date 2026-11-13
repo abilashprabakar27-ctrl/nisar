@@ -39,3 +39,16 @@ def test_mixed_beta_warns():
 def test_gap_straddle_warns():
     s, w = assess_availability(B, A, 0.0)
     assert s == "ok" and any("gap" in x.lower() for x in w)
+
+
+def test_lowest_quality_reported():
+    from workers.check import lowest_quality
+    assert lowest_quality([P("2026-06-01", "BETA"), P("2026-06-13", "PROVISIONAL")]) == "BETA"
+    assert lowest_quality([P("2026-06-01", "VALIDATED"), P("2026-06-13", "PROVISIONAL")]) == "PROVISIONAL"
+    assert lowest_quality([P("2026-06-01")]) == "VALIDATED"
+
+
+def test_mixed_quality_limits_line():
+    s, w = assess_availability([P("2026-06-01", "PROVISIONAL"), P("2026-06-13")],
+                               [P("2026-06-25"), P("2026-07-07")], 0.0)
+    assert s == "ok" and any("lowest" in x.lower() and "PROVISIONAL" in x for x in w)

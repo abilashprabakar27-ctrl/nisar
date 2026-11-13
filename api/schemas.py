@@ -5,7 +5,7 @@ from typing import Literal
 Status = Literal["ok", "insufficient_data", "error"]
 Source = Literal["live", "saved", "sample"]
 Confidence = Literal["High", "Medium", "Lower"]
-Label = Literal["likely_became_water", "likely_water_receded", "no_change"]
+Label = Literal["likely_became_water", "likely_water_receded", "likely_flooded_vegetation", "no_change"]
 
 
 @dataclass

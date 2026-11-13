@@ -101,3 +101,94 @@ def test_single_after_never_high():
     rng = np.random.default_rng(9)
     res, _ = run(scene(rng), scene(rng, (30, 50, 30, 60), n=1))
     assert res.status == "insufficient_data" or res.confidence != "High"
+
+
+# ---- s5: Lee + Otsu + HV flooded vegetation + provenance ----
+import methods.floods as floods
+from api.schemas import validate_result
+
+
+def hv_scene(rng, n=3, level=0.02, patch=None, patch_level=None):
+    out = []
+    for _ in range(n):
+        p = np.full((100, 100), level)
+        if patch:
+            r0, r1, c0, c1 = patch
+            p[r0:r1, c0:c1] = patch_level
+        out.append(p * rng.exponential(1.0, p.shape))
+    return out
+
+
+def bright_scene(rng, patch, n=3, land=0.1, gain_db=6.0):
+    out = []
+    for _ in range(n):
+        p = np.full((100, 100), land)
+        r0, r1, c0, c1 = patch
+        p[r0:r1, c0:c1] = land * 10 ** (gain_db / 10)
+        out.append(p * rng.exponential(1.0, p.shape))
+    return out
+
+
+FOREST = (30, 50, 30, 60)
+
+
+def test_flood_recovered_by_otsu_not_fixed_threshold(monkeypatch):
+    monkeypatch.setattr(floods, "CHANGE_DB", 99.0)  # fixed threshold unusable -> must be Otsu
+    rng = np.random.default_rng(10)
+    res, lab = run(scene(rng), scene(rng, (30, 50, 30, 60)))
+    assert 35 < res.area_ha["likely_became_water"] <= 65 and lab[40, 45] == 1
+    assert not any("became water" in x and "fixed" in x for x in res.limits)
+
+
+def test_flooded_vegetation_only_with_hv():
+    rng = np.random.default_rng(11)
+    b, a = scene(rng), bright_scene(rng, FOREST)
+    bhv, ahv = hv_scene(rng), hv_scene(rng)
+    res, lab = run(b, a, before_hv=bhv, after_hv=ahv)
+    assert lab[40, 45] == 3 and lab[5, 5] == 0
+    assert 35 < res.area_ha["likely_flooded_vegetation"] <= 65
+    assert res.polarization == "HH+HV"
+    res2, lab2 = run(b, a)
+    assert not (lab2 == 3).any() and "likely_flooded_vegetation" not in res2.area_ha
+    assert res2.polarization == "HH"
+    assert "HV not provided: flooded vegetation not assessed" in res2.limits
+
+
+def test_hv_drop_not_flooded_vegetation():
+    rng = np.random.default_rng(12)
+    b, a = scene(rng), bright_scene(rng, FOREST)
+    res, lab = run(b, a, before_hv=hv_scene(rng), after_hv=hv_scene(rng, patch=FOREST, patch_level=0.005))
+    assert not (lab == 3).any() and res.area_ha["likely_flooded_vegetation"] == 0
+
+
+def test_mixed_beta_provisional_reports_beta():
+    rng = np.random.default_rng(13)
+    br = refs(["2026-06-01", "2026-06-13", "2026-06-25"], "BETA")
+    ar = refs(["2026-07-01", "2026-07-07", "2026-07-13"], "PROVISIONAL")
+    res, _ = run(scene(rng), scene(rng, (30, 50, 30, 60)), before_refs=br, after_refs=ar)
+    assert res.quality_level == "BETA" and any("lowest" in x.lower() for x in res.limits)
+
+
+def test_degenerate_no_change_falls_back():
+    rng = np.random.default_rng(14)
+    res, lab = run(scene(rng), scene(rng))
+    assert res.status == "ok" and not np.isin(lab, [1, 2, 3]).any()
+    assert any("fixed 3 dB" in x for x in res.limits)
+    validate_result(res.to_dict())
+
+
+def test_ok_result_has_provenance():
+    rng = np.random.default_rng(15)
+    res, _ = run(scene(rng), scene(rng, (30, 50, 30, 60)))
+    validate_result(res.to_dict())
+    assert res.method_version == "floods-0.2.0" and res.quality_level == "VALIDATED"
+    assert "HH" in res.measured and " ha" in res.measured
+    assert res.interpreted.startswith("Likely") and "not confirmed" in res.interpreted
+
+
+def test_shadow_and_slope_masked():
+    rng = np.random.default_rng(16)
+    sh = np.zeros((100, 100), bool); sh[30:50, 30:40] = True
+    sl = np.zeros((100, 100)); sl[30:50, 50:60] = 30.0
+    _, lab = run(scene(rng), scene(rng, (30, 50, 30, 60)), shadow=sh, dem_slope_deg=sl)
+    assert lab[40, 35] == 255 and lab[40, 55] == 255 and lab[40, 45] == 1
