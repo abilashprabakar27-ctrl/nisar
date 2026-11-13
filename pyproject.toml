@@ -7,3 +7,5 @@ dependencies = ["numpy","scipy","xarray","rasterio","h5py","asf_search","earthac
 dev = ["pytest","httpx"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+[tool.setuptools]
+packages = ["api", "methods", "workers"]
