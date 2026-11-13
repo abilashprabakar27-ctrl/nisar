@@ -47,10 +47,12 @@ def sample_result(bbox: list[float]) -> dict:
 
 
 def run_analysis(req: dict) -> dict:
-    """TODO(science wiring): replace with the real pipeline returning a ChangeResult dict
-    (api.schemas.ChangeResult.to_dict()). May include an optional "_verify" dict (per-source overlap)
+    """Real pipeline (workers.pipeline.run) when data covers the area; otherwise the labelled sample.
+    Returns a ChangeResult dict (api.schemas.ChangeResult.to_dict()). May include an optional "_verify" dict (per-source overlap)
     which the API serves at /analyses/{id}/agreement and strips from the result."""
-    return sample_result(req["bbox"])
+    from workers.pipeline import run  # lazy: pulls in h5py/rasterio
+    result = run(req)
+    return result if result is not None else sample_result(req["bbox"])
 
 
 def _run(job_id: str, key: str, req: dict) -> None:
