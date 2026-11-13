@@ -32,6 +32,25 @@ class ChangeResult:
     limits: list[str] = field(default_factory=list)
     result_map: str | None = None              # path/URL of overlay
     message: str = ""
+    # --- provenance (Final Architecture s4/s9): API rejects 'ok' results without these ---
+    quality_level: str | None = None           # lowest level among passes used
+    polarization: str | None = None            # e.g. "HH", "HH+HV"
+    method_version: str | None = None
+    referee_files: list[str] = field(default_factory=list)
+    measured: str = ""                         # what the radar measured
+    interpreted: str = ""                      # what it probably means (always 'likely')
 
     def to_dict(self) -> dict:
         return asdict(self)
+
+
+def validate_result(d: dict) -> None:
+    """Honesty rule: an 'ok' result must carry quality, confidence, provenance. Raises ValueError."""
+    if d.get("status") != "ok":
+        return
+    missing = [k for k in ("quality_level", "confidence", "polarization", "method_version", "measured", "interpreted")
+               if not d.get(k)]
+    if not d.get("before") or not d.get("after"):
+        missing.append("before/after passes")
+    if missing:
+        raise ValueError("result missing required provenance: " + ", ".join(missing))
