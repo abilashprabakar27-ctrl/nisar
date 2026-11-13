@@ -2,7 +2,7 @@
 name = "nisar-change-explorer"
 version = "0.1.0"
 requires-python = ">=3.11"
-dependencies = ["numpy","scipy","xarray","rasterio","h5py","asf_search","earthaccess","fastapi","uvicorn","pandas"]
+dependencies = ["numpy","scipy","xarray","rasterio","h5py","asf_search","earthaccess","fastapi","uvicorn","pandas","pyproj","fsspec","aiohttp","requests"]
 [project.optional-dependencies]
 dev = ["pytest","httpx"]
 [tool.pytest.ini_options]
