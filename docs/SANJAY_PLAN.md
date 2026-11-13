@@ -17,7 +17,7 @@ Rule: no accuracy claim beyond what the tables below show; sample data stays lab
 | 8 | Hand-labelled check points (90) | NOT DONE, needs a human | `data/reference/tonlesap/checkpoints_tonlesap.csv` |
 | 9 | Newest-pass-date function for "Watch this place" | DONE | `workers/check.py` |
 | 10 | HH / HV / colour-mix images for the result | DONE (function; not yet served by the API) | `workers/render.py` |
-| 11 | Run Nile Sudd (HH-only on 5 dates) and record the result honestly | TODO | |
+| 11 | Run Nile Sudd (HH-only) | DONE, UNVALIDATED | 215 ha became water, 1,534 ha receded, no masks, no OPERA check, confidence Medium |
 | 12 | Per-pass change series for the timeline chart | TODO | |
 | 13 | Driver evidence (rain, river share, low-lying share) | TODO, needs IMERG | |
 | 14 | One-page science note (inputs, steps, outputs, limits) | TODO | |

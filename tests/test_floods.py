@@ -192,3 +192,14 @@ def test_shadow_and_slope_masked():
     sl = np.zeros((100, 100)); sl[30:50, 50:60] = 30.0
     _, lab = run(scene(rng), scene(rng, (30, 50, 30, 60)), shadow=sh, dem_slope_deg=sl)
     assert lab[40, 35] == 255 and lab[40, 55] == 255 and lab[40, 45] == 1
+
+
+def test_confidence_capped_when_fallback_threshold_produced_area():
+    rng = np.random.default_rng(0)
+    res, _ = run(scene(rng), scene(rng, (30, 50, 30, 60)))
+    assert res.confidence == "High"          # planted flood: adaptive threshold, no fallback area
+    rng = np.random.default_rng(3)
+    base = scene(rng)
+    res, _ = run(base, [b * 0.5 for b in base])   # uniform 3 dB drop: degenerate histogram, fixed 3 dB used
+    assert any("fixed 3 dB used" in l for l in res.limits)
+    assert res.confidence != "High"

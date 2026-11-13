@@ -53,7 +53,7 @@ def _median(stack):
 def otsu(values, bins=OTSU_BINS):
     """Otsu threshold on finite values. Returns (threshold, lower_mean, upper_mean, n_upper) or None."""
     x = values[np.isfinite(values)]
-    if x.size < 2 or x.min() == x.max():
+    if x.size < 2 or np.ptp(x) < 1e-6:   # float noise on a constant change also counts as degenerate
         return None
     hist, edges = np.histogram(x, bins=bins)
     c = (edges[:-1] + edges[1:]) / 2
@@ -181,6 +181,9 @@ def detect_change(before, after, *, pixel_area_ha, bbox, before_refs, after_refs
         res.confidence, why = "Medium", "changed pixels persist in only some passes or masking is high"
     else:
         res.confidence, why = "Lower", "weak persistence across after-passes or too few passes"
+    used_fallback = (not otsu_neg and became.any()) or (not otsu_pos and (receded.any() or veg.any()))
+    if res.confidence == "High" and used_fallback:
+        res.confidence, why = "Medium", "a change threshold fell back to the fixed value, so the changed class was not clearly separated"
     res.confidence_reason = f"{why} ({pers:.0%} of {n_after} after-passes agree; {mfrac:.0%} masked)."
 
     thr = (f"thresholds -{t_neg:.1f}/+{t_pos:.1f} dB "
