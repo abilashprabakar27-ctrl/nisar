@@ -7,3 +7,4 @@ data/raw/
 *.tif
 !data/samples/*.tif
 .pytest_cache/
+data/cache/

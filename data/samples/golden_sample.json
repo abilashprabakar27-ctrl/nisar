@@ -1,0 +1,28 @@
+{
+  "status": "ok",
+  "source": "sample",
+  "bbox": [-91.2, 29.1, -91.0, 29.25],
+  "before": [
+    {"scene": "SAMPLE_SCENE_B1", "date": "2026-03-02", "track": 42, "direction": "ASCENDING", "frame": 118, "quality": "PROVISIONAL"},
+    {"scene": "SAMPLE_SCENE_B2", "date": "2026-03-14", "track": 42, "direction": "ASCENDING", "frame": 118, "quality": "PROVISIONAL"}
+  ],
+  "after": [
+    {"scene": "SAMPLE_SCENE_A1", "date": "2026-09-05", "track": 42, "direction": "ASCENDING", "frame": 118, "quality": "BETA"},
+    {"scene": "SAMPLE_SCENE_A2", "date": "2026-09-17", "track": 42, "direction": "ASCENDING", "frame": 118, "quality": "BETA"}
+  ],
+  "area_ha": {
+    "likely_became_water": 412.5,
+    "likely_water_receded": 188.0,
+    "no_change": 9120.4
+  },
+  "confidence": "Medium",
+  "confidence_reason": "Placeholder numbers; no NISAR processing has run.",
+  "masked_fraction": 0.12,
+  "limits": [
+    "Sample data - not live",
+    "Placeholder numbers; masked pixels are excluded from area totals",
+    "Labels show likely change only; not validated against reference water maps"
+  ],
+  "result_map": null,
+  "message": "Sample result returned until the science pipeline is wired in."
+}
