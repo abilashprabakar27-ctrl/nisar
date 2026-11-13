@@ -1,14 +1,47 @@
 {
   "status": "ok",
   "source": "sample",
-  "bbox": [-91.2, 29.1, -91.0, 29.25],
+  "bbox": [
+    -91.2,
+    29.1,
+    -91.0,
+    29.25
+  ],
   "before": [
-    {"scene": "SAMPLE_SCENE_B1", "date": "2026-03-02", "track": 42, "direction": "ASCENDING", "frame": 118, "quality": "PROVISIONAL"},
-    {"scene": "SAMPLE_SCENE_B2", "date": "2026-03-14", "track": 42, "direction": "ASCENDING", "frame": 118, "quality": "PROVISIONAL"}
+    {
+      "scene": "SAMPLE_SCENE_B1",
+      "date": "2026-03-02",
+      "track": 42,
+      "direction": "ASCENDING",
+      "frame": 118,
+      "quality": "PROVISIONAL"
+    },
+    {
+      "scene": "SAMPLE_SCENE_B2",
+      "date": "2026-03-14",
+      "track": 42,
+      "direction": "ASCENDING",
+      "frame": 118,
+      "quality": "PROVISIONAL"
+    }
   ],
   "after": [
-    {"scene": "SAMPLE_SCENE_A1", "date": "2026-09-05", "track": 42, "direction": "ASCENDING", "frame": 118, "quality": "BETA"},
-    {"scene": "SAMPLE_SCENE_A2", "date": "2026-09-17", "track": 42, "direction": "ASCENDING", "frame": 118, "quality": "BETA"}
+    {
+      "scene": "SAMPLE_SCENE_A1",
+      "date": "2026-09-05",
+      "track": 42,
+      "direction": "ASCENDING",
+      "frame": 118,
+      "quality": "BETA"
+    },
+    {
+      "scene": "SAMPLE_SCENE_A2",
+      "date": "2026-09-17",
+      "track": 42,
+      "direction": "ASCENDING",
+      "frame": 118,
+      "quality": "BETA"
+    }
   ],
   "area_ha": {
     "likely_became_water": 412.5,
@@ -24,5 +57,11 @@
     "Labels show likely change only; not validated against reference water maps"
   ],
   "result_map": null,
-  "message": "Sample result returned until the science pipeline is wired in."
+  "message": "Sample result returned until the science pipeline is wired in.",
+  "quality_level": "BETA",
+  "polarization": "HH+HV",
+  "method_version": "floods-0.2.0",
+  "measured": "Sample numbers only: radar backscatter change between the before and after passes (placeholder).",
+  "interpreted": "Likely new water in places where backscatter dropped; likely receded water where it rose (placeholder).",
+  "referee_files": []
 }

@@ -1,10 +1,11 @@
-"""File cache for analysis results, keyed by sha1 of the request."""
+"""File cache for analysis results, keyed by sha1 of the request + method version."""
 import hashlib
 import json
 import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+METHOD_VERSION = "floods-0.2.0"
 
 
 def cache_dir() -> Path:
@@ -13,6 +14,7 @@ def cache_dir() -> Path:
 
 def make_key(bbox, before, after, question: str) -> str:
     payload = {
+        "method_version": METHOD_VERSION,
         "bbox": [float(v) for v in bbox],
         "before": list(before),
         "after": list(after),
