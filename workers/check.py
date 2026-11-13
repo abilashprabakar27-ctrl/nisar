@@ -37,3 +37,10 @@ def assess_availability(before: list[PassRef], after: list[PassRef],
                              and max(date.fromisoformat(p.date) for p in after) > GAP_END):
         warn.append("Before/after passes straddle the permanent data gap 2026-07-27 to 2026-08-10; the gap is not filled.")
     return "ok", warn
+
+
+def newest_pass_date(area: str, catalog_rows) -> str | None:
+    """ISO date of the newest usable (not in the data gap) pass for an area, or None. For "Watch this place"."""
+    dates = [r["date"] for r in catalog_rows
+             if r.get("area") == area and str(r.get("in_gap", "")).lower() != "true"]
+    return max(dates) if dates else None
