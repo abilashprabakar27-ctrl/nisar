@@ -3,7 +3,7 @@
 1. Install: `pip install -e .[dev]`
 2. Optional config: copy `.env.example` to `.env` and fill in values (never commit it).
 3. Export any vars you need, e.g. `export EARTHDATA_TOKEN=...` (not used by the sample stub yet).
-4. Start: `uvicorn server.app:app --reload --port 8000`
+4. Start: `uvicorn api.app:app --reload --port 8000`
 5. Check: `curl http://localhost:8000/health` returns `{"status":"ok"}`.
 6. Analyze: `POST /analyze` with bbox, before/after dates and a question; returns `{"job_id": ...}`.
 7. Poll: `GET /jobs/{job_id}` until status is `done` (or `error`).

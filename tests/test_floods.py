@@ -1,6 +1,6 @@
 import numpy as np
-from science.schema import PassRef
-from science.detect_change import detect_change
+from api.schemas import PassRef
+from methods.floods import detect_change
 
 HA = 0.1  # pixel area; 10 px = 1 ha
 BBOX = (0.0, 0.0, 1.0, 1.0)

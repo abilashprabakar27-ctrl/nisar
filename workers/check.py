@@ -1,5 +1,5 @@
 from datetime import date
-from science.schema import PassRef, Status
+from api.schemas import PassRef, Status
 
 MIN_PASSES = 2
 MAX_MASKED_FRACTION = 0.30

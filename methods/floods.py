@@ -1,8 +1,8 @@
 import warnings
 import numpy as np
 from scipy import ndimage
-from science.schema import ChangeResult, PassRef
-from science.availability import assess_availability
+from api.schemas import ChangeResult, PassRef
+from workers.check import assess_availability
 
 SMOOTH_SIZE = 5
 CHANGE_DB = 3.0

@@ -1,4 +1,4 @@
-"""In-memory background jobs for /analyze. Finished results are saved via server.cache."""
+"""In-memory background jobs for /analyze. Finished results are saved via api.cache."""
 import json
 import threading
 import uuid

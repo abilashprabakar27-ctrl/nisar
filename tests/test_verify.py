@@ -1,5 +1,5 @@
 import numpy as np
-from science.validate import validate
+from workers.verify import validate
 
 
 def grid(r0, r1, c0, c1):

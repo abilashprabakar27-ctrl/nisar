@@ -23,7 +23,7 @@ FastAPI server/app.py ── jobs.py (threaded queue) ── cache.py (sha1 file
 
 | Module | Responsibility | Depends on |
 |---|---|---|
-| `science/schema.py` | Frozen contract dataclasses | none |
+| `api/schemas.py` | Frozen contract dataclasses | none |
 | `science/availability.py` | Which passes are usable; insufficient-data rule | schema |
 | `science/detect_change.py` | Composite, dB diff, thresholds, masks, 1 ha filter, confidence | schema, availability |
 | `science/validate.py` | IoU/precision/recall vs OPERA and check points | numpy |
@@ -41,7 +41,7 @@ FastAPI server/app.py ── jobs.py (threaded queue) ── cache.py (sha1 file
 **Alignment [added]:** passes of one track/frame share the grid, so no resampling is needed within a geometry; `io.py` asserts identical shape/transform and rejects mixed geometry rather than resampling.
 
 ## 4. Contract and states
-- `ChangeResult` fields: see `science/schema.py` (status, source, bbox, before/after `PassRef`s, `area_ha` by label, confidence + reason, masked_fraction, limits, result_map, message).
+- `ChangeResult` fields: see `api/schemas.py` (status, source, bbox, before/after `PassRef`s, `area_ha` by label, confidence + reason, masked_fraction, limits, result_map, message).
 - Job states: `queued -> running(step) -> done | error`. Cache hit returns `done` at once with step `saved`.
 - Errors (plain message + next step): `area_too_large` (422, >25x25 km), `no_data`, `insufficient_data` (200, status in body), `upstream_unavailable` (falls back to saved/sample), `unknown_job` (404).
 - Cache key: `sha1(bbox, before/after dates, question)`; samples are never promoted to `saved`.

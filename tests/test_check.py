@@ -1,5 +1,5 @@
-from science.schema import PassRef
-from science.availability import assess_availability
+from api.schemas import PassRef
+from workers.check import assess_availability
 
 
 def P(date, q="VALIDATED", track=1, d="ASCENDING", frame=1):

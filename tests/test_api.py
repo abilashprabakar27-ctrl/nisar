@@ -3,8 +3,8 @@ import time
 import pytest
 from fastapi.testclient import TestClient
 
-from server import cache
-from server.app import app
+from api import cache
+from api.app import app
 
 SMALL = [-91.2, 29.1, -91.0, 29.25]          # ~19 x 17 km
 BIG = [-91.5, 29.0, -90.5, 30.0]             # ~85 x 111 km
