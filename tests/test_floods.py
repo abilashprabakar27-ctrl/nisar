@@ -181,7 +181,7 @@ def test_ok_result_has_provenance():
     rng = np.random.default_rng(15)
     res, _ = run(scene(rng), scene(rng, (30, 50, 30, 60)))
     validate_result(res.to_dict())
-    assert res.method_version == "floods-0.2.0" and res.quality_level == "VALIDATED"
+    assert res.method_version == "floods-0.3.0" and res.quality_level == "VALIDATED"
     assert "HH" in res.measured and " ha" in res.measured
     assert res.interpreted.startswith("Likely") and "not confirmed" in res.interpreted
 

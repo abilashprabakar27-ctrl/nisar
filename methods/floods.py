@@ -8,11 +8,11 @@ from scipy import ndimage
 from api.schemas import ChangeResult, PassRef
 from workers.check import assess_availability, lowest_quality
 
-METHOD_VERSION = "floods-0.2.0"
+METHOD_VERSION = "floods-0.3.0"
 LEE_SIZE = 5
 ENL = 1.0                  # equivalent number of looks of the input (single-look intensity)
 CHANGE_DB = 3.0            # fallback threshold when the Otsu histogram is degenerate
-WATER_DB = -18.0           # open-water ceiling
+WATER_DB = -12.0           # open-water ceiling; tuned 2026-11-14 on Tonle Sap west half vs OPERA (east-half IoU 0.71 vs 0.55 at -18); NOT validated elsewhere
 HV_TOL_DB = 1.0            # HV "not decreasing" tolerance (noise)
 STEEP_DEG = 10.0           # slope above which pixels are masked
 MIN_CHANGED_PX = 50        # fewer tail pixels above Otsu -> degenerate
