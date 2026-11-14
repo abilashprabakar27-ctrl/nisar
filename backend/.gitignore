@@ -1,0 +1,19 @@
+# Secrets: never commit (contains NASA Earthdata credentials)
+.env
+.env.*
+!.env.example
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Local NISAR data, cache, results, jobs
+data/
+*.npz
+*.h5
+
+# Python / test caches
+__pycache__/
+*.pyc
+.pytest_cache/

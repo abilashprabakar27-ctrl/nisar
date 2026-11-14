@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NISAR Change Explorer</title>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+<meta name="description" content="See how any place on Earth is changing, using NASA-ISRO NISAR radar.">
+<link rel="stylesheet" href="vendor/maplibre-gl.css">
+<link rel="stylesheet" href="style.css">
+<script src="vendor/maplibre-gl.js"></script>
+<script src="vendor/chart.umd.min.js"></script>
+</head>
+<body>
+<header class="top">
+  <button class="brand" id="homeBtn" aria-label="NISAR Change Explorer, start again">
+    <svg width="26" height="26" viewBox="0 0 28 28" fill="none" stroke="#7DD3FC" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><circle cx="14" cy="14" r="2.5" fill="#7DD3FC"></circle><path d="M7 14a7 7 0 0 1 7-7"></path><path d="M3 14A11 11 0 0 1 14 3"></path><path d="M21 14a7 7 0 0 1-7 7"></path><path d="M25 14a11 11 0 0 1-11 11"></path></svg>
+    NISAR CHANGE EXPLORER
+  </button>
+  <nav aria-label="Main">
+    <i></i><button data-nav="find" aria-current="page">EXPLORE</button>
+    <i></i><button data-nav="stories">STORIES</button>
+    <i></i><button data-nav="watch">WATCH LIST</button>
+    <i></i><button data-nav="evidence">HOW WE KNOW</button>
+  </nav>
+  <span class="chip mono" id="latestChip"><span class="live"></span><span id="latestText">NISAR · EVERY 12 DAYS</span></span>
+</header>
+
+<div class="stage">
+  <div id="map" aria-label="Map"></div>
+  <div id="ui"></div>
+</div>
+
+<div class="progress" id="progress" aria-label="Your progress">
+  <div class="rail"></div><div class="fill" id="progFill"></div>
+</div>
+
+<div id="overlay"></div>
+<aside class="dl frame" id="dl" hidden aria-live="polite" aria-label="Data download"></aside>
+<div class="toast" id="toast" role="status" hidden></div>
+<article class="report" id="report" aria-hidden="true"></article>
+
+<div class="intro" id="intro" role="dialog" aria-modal="true" aria-labelledby="introTitle">
+  <div class="intro-stars" aria-hidden="true"></div>
+  <div class="intro-ring" aria-hidden="true"></div>
+  <img class="intro-globe" src="globe.png" alt="" aria-hidden="true">
+  <div class="intro-text">
+    <span class="intro-kicker mono">NASA–ISRO NISAR RADAR</span>
+    <h1 class="intro-title" id="introTitle" aria-label="NISAR Change Explorer"></h1>
+    <p class="intro-tag">See how any place on Earth is changing, through cloud, day and night.</p>
+    <button class="btn primary intro-go" id="introGo">START EXPLORING ›</button>
+  </div>
+  <button class="intro-skip mono" id="introSkip">SKIP INTRO</button>
+</div>
+<div class="scrollhint" id="scrollHint" hidden><button type="button"><span id="scrollHintText">SCROLL DOWN FOR MORE</span><i aria-hidden="true">↓</i></button></div>
+
+<script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,8 @@
+[
+  {"name": "Patna, Bihar", "bbox": [85.00, 25.35, 85.25, 25.60], "event_date": "2026-09-07",
+   "story": "September 2026 Bihar floods (Punpun river)"},
+  {"name": "Morigaon, Assam", "bbox": [92.15, 26.15, 92.40, 26.40], "event_date": "2026-07-20",
+   "story": "July 2026 Brahmaputra flood"},
+  {"name": "Kanpur, Uttar Pradesh", "bbox": [80.25, 26.35, 80.50, 26.60], "event_date": "2026-09-22",
+   "story": "Late September 2026 Uttar Pradesh floods"}
+]
