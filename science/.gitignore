@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+data/raw/
+*.h5
+*.tif
+!data/samples/*.tif
+.pytest_cache/
+data/cache/
+graphify-out/cache/
+graphify-out/.graphify_*
