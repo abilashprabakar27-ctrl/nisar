@@ -190,12 +190,22 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
     elif agreement:
         agree_out = agreement
 
-    level, reason = change.confidence(len(before), len(after), r.persistence, overlap, r.masked_fraction, qualities,
-                                       new_water_ha=r.areas_ha.get("became_water"))
-
     all_dates = [p.date for p in before + after]
     db_all = [change.lee_filter(change.to_db(hh[d])) for d in all_dates]
     series = change.water_area_series(db_all, r.threshold_db, grid.pixel_ha)
+
+    # Reliability checks (each fail-soft: data missing -> "not checked")
+    stab = change.radiometric_stability(all_dates, db_all, r.classes, r.threshold_db)
+    wc = data_sources.worldcover_on_grid(bbox, grid) if online else None
+    lc = change.landcover_shares(r.classes, wc)
+    validation = change.validation_status(bbox)
+    unstable = [f["date"] for f in stab.get("flagged", [])]
+    level, reason = change.confidence(len(before), len(after), r.persistence, overlap, r.masked_fraction, qualities,
+                                       new_water_ha=r.areas_ha.get("became_water"),
+                                       unstable_passes=unstable if stab.get("checked") else None,
+                                       cropland_share=lc.get("cropland_share") if r.areas_ha["became_water"] >= 5 else None,
+                                       place_validated=validation["this_place_validated"])
+
     per_pass = [{"date": d, "water_ha": w, "change_ha": None if i == 0 else round(w - series[i - 1], 1)}
                 for i, (d, w) in enumerate(zip(all_dates, series))]
 
@@ -227,6 +237,16 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
     if any(q != "Validated" for q in qualities):
         limits.append("Some NISAR data used is " + "/".join(q for q in qualities if q != "Validated") +
                       " quality; numbers may shift slightly when reprocessed.")
+    limits += change.stability_limits(stab)
+    if not stab.get("checked"):
+        limits.append(f"Pass-to-pass brightness was not checked ({stab.get('note')}).")
+    if not lc.get("checked"):
+        limits.append("Land cover (ESA WorldCover) was not checked, so we cannot say whether new water lies on cropland.")
+    elif lc.get("cropland_share") is not None and lc["cropland_share"] > change.CROPLAND_SHARE_MAX:
+        limits.append("Most detected new water lies on cropland, where radar cannot separate a flood from irrigated or "
+                      "flooded paddies; this kind of place failed validation.")
+    if validation["this_place"] == "not validated":
+        limits.append("This place has not been validated: the method was scored against OPERA on one lake window only.")
     if before[-1].date <= config.DATA_GAP[1] and after[0].date >= config.DATA_GAP[0]:
         limits.append("No NISAR images exist 27 Jul - 10 Aug 2026; nothing is filled in.")
 
@@ -246,6 +266,7 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
                      "football_pitches": int(round(hect / config.FOOTBALL_PITCH_HA)),
                      "share_of_area_pct": round(100 * hect / max(area_km2(bbox) * 100, 1), 1)},
         "confidence": {"level": level, "reason": reason},
+        "validation": validation,
         "measured": measured, "interpreted": interpreted,
         "agreement": agree_out,
         "per_pass": per_pass,
@@ -261,6 +282,7 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
                        "threshold_hv_db": None if r.threshold_hv_db is None else round(r.threshold_hv_db, 2),
                        "change_db": config.CHANGE_DB, "resolution_m": res, "epsg": grid.epsg,
                        "masked_fraction": round(r.masked_fraction, 3), "coverage_by_date": coverage, "persistence": round(r.persistence, 3),
+                       "radiometric_stability": stab, "landcover": lc,
                        "polarization_used": "HH + HV" if r.threshold_hv_db is not None else "HH",
                        "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                        "seconds": round(time.time() - t0, 1), "step_seconds": prog.timings},
