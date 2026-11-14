@@ -24,6 +24,11 @@ function toast(msg, ms = 2600) {
 }
 
 async function api(path, opts = {}) {
+  if (window.NCE_DEMO) return demoApi(path, opts);
+  return apiServer(path, opts);
+}
+
+async function apiServer(path, opts = {}) {
   let r;
   try {
     r = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
@@ -36,6 +41,97 @@ async function api(path, opts = {}) {
     throw Object.assign(new Error(detail || `Request failed (${r.status})`), { status: r.status });
   }
   return r.status === 204 ? null : r.json();
+}
+
+
+// ---------------------------------------------------------------- online demo (static files, no server)
+// The Vercel demo has no Python server. It answers the same requests from files made by
+// scripts/export_demo.py: prepared places, their saved answers and images.
+const GITHUB_URL = "https://github.com/abilashprabakar27-ctrl/nisar-change-explorer";
+const DEMO = { prepared: null, jobs: {} };
+async function demoJson(path) {
+  const r = await fetch(path, { cache: "no-cache" });
+  if (!r.ok) throw Object.assign(new Error("That isn’t part of the online demo."), { notInDemo: true });
+  return r.json();
+}
+async function demoPrepared() {
+  if (!DEMO.prepared) DEMO.prepared = await demoJson("content/prepared.json");
+  return DEMO.prepared;
+}
+function demoFind(bbox) {
+  if (!bbox || !DEMO.prepared) return null;
+  const cx = (bbox[0] + bbox[2]) / 2, cy = (bbox[1] + bbox[3]) / 2;
+  return DEMO.prepared.places.find((p) => cx >= p.bbox[0] && cx <= p.bbox[2] && cy >= p.bbox[1] && cy <= p.bbox[3]) || null;
+}
+const demoWatch = {
+  load() { try { return JSON.parse(localStorage.getItem("nce-watch") || "[]"); } catch (_) { return []; } },
+  save(v) { try { localStorage.setItem("nce-watch", JSON.stringify(v)); } catch (_) {} },
+};
+async function demoApi(path, opts = {}) {
+  const method = (opts.method || "GET").toUpperCase();
+  const body = opts.body ? JSON.parse(opts.body) : {};
+  const [route, query] = path.split("?");
+  await demoPrepared();
+  if (route === "/demo-areas") return DEMO.prepared.stories;
+  if (route === "/places") {
+    const q = new URLSearchParams(query).get("q");
+    try {
+      const r = await fetch("https://nominatim.openstreetmap.org/search?format=json&limit=5&q=" + encodeURIComponent(q));
+      return (await r.json()).map((p) => ({ name: p.display_name, lat: +p.lat, lon: +p.lon }));
+    } catch (_) { throw new Error("Search isn’t available right now. Try one of the stories instead."); }
+  }
+  if (route === "/availability") {
+    const p = demoFind(body.bbox);
+    if (!p) throw Object.assign(new Error("not prepared"), { notInDemo: true });
+    return p.availability;
+  }
+  if (route === "/downloads/status") return { frames_total: 0, dates: [] };
+  if (route === "/analyses" && method === "POST") {
+    const p = demoFind(body.bbox);
+    if (!p) throw Object.assign(new Error("not prepared"), { notInDemo: true });
+    const id = "demo-" + Date.now();
+    DEMO.jobs[id] = { key: p.key, n: 0 };
+    if (body.event_date && p.window && !(body.event_date > p.window[0] && body.event_date <= p.window[1])) toast("The online demo shows the prepared dates for this place.", 4000);
+    return { id, status: "queued" };
+  }
+  if (route.startsWith("/analyses/")) {
+    const job = DEMO.jobs[route.split("/")[2]];
+    if (!job) throw Object.assign(new Error("not prepared"), { notInDemo: true });
+    job.n += 1;
+    const steps = [["check", 10], ["prepare", 45], ["detect", 70], ["explain", 92]];
+    if (job.n <= steps.length) return { status: "running", step: steps[job.n - 1][0], progress: steps[job.n - 1][1] };
+    return { status: "done", progress: 100, step: "done", result: await demoJson(`content/results/${job.key}.json`) };
+  }
+  if (route === "/sample") return demoJson(`content/results/${DEMO.prepared.sample}.json`);
+  const ask = route.match(/^\/results\/([^/]+)\/ask$/);
+  if (ask) {
+    const answers = await demoJson(`content/ask/${ask[1]}.json`);
+    return { answer: answers[body.question] || "We can’t answer that one from this result.", based_on: [], suggestions: [] };
+  }
+  const res = route.match(/^\/results\/([^/]+)$/);
+  if (res) return demoJson(`content/results/${res[1]}.json`);
+  if (route === "/learn") return demoJson(`content/learn-${new URLSearchParams(query).get("tag") || "all"}.json`);
+  if (route === "/watch" && method === "POST") {
+    const items = demoWatch.load();
+    items.push({ id: String(Date.now()), name: body.name, bbox: body.bbox, last_result_date: body.last_result_date, new_pass_available: false });
+    demoWatch.save(items); return items.at(-1);
+  }
+  if (route === "/watch" || route === "/watch/check") return demoWatch.load();
+  if (route.startsWith("/watch/") && method === "DELETE") { demoWatch.save(demoWatch.load().filter((w) => w.id !== route.split("/")[2])); return null; }
+  throw Object.assign(new Error("That isn’t part of the online demo."), { notInDemo: true });
+}
+function renderNotInDemo() {
+  setProgress(0);
+  const names = (DEMO.prepared ? DEMO.prepared.places : []).map((p, i) => `<button class="btn small" data-demo="${i}">${esc(p.name)}</button>`).join("");
+  ui(`<aside class="side right frame" style="width:440px" role="alert">
+    <div class="screenhead"><div><h1>This place isn’t in the online demo</h1></div></div>
+    <p>The online version shows a few places we’ve already prepared. To explore anywhere on Earth, you can run the full app on your own computer.</p>
+    <div class="lbl">Try one of these instead</div>
+    <div class="presets">${names}</div>
+    <div class="row"><a class="btn primary" href="${GITHUB_URL}" target="_blank" rel="noopener">Get the full app</a><button class="btn" id="niBack">Back to the map</button></div>
+  </aside>`);
+  $$("[data-demo]").forEach((b) => b.onclick = () => { const p = DEMO.prepared.places[+b.dataset.demo]; setArea(p.bbox, p.name, p.event_date); go("check"); });
+  $("#niBack").onclick = () => { S.area = null; drawArea(); go("find"); };
 }
 
 // ---------------------------------------------------------------- state
@@ -139,7 +235,7 @@ function go(screen) {
 
 
 // ---------------------------------------------------------------- "scroll down" cue
-const HINTS = { answer: "Scroll for the full story, charts and common questions", sources: "Scroll to see why the numbers differ",
+const HINTS = { answer: "Scroll for the full story, charts and common questions", sources: "Scroll for more",
   evidence: "Scroll for limits and the data we used", why: "Scroll to see every cause we checked" };
 let hintCleanup = null;
 function setupScrollHint() {
@@ -299,7 +395,7 @@ async function renderFind() {
       <button class="btn small" type="submit">Search</button>
     </form>
     <ul class="results" id="results"></ul>
-    <div><div class="lbl">Or start with a real 2026 event</div><div class="presets" id="presets" style="margin-top:8px"></div></div>
+    <div><div class="lbl">${window.NCE_DEMO ? "Pick one of these places to explore" : "Or start with a real 2026 event"}</div><div class="presets" id="presets" style="margin-top:8px"></div></div>
     <div class="lbl">${a ? "Your area" : "No area picked yet"}</div>
     ${a ? `
       <div class="statgrid">
@@ -805,12 +901,11 @@ function renderSources() {
       <figure class="frame"><div class="tileimg"><img src="${esc(I.photo)}" alt="Normal satellite photo from NASA Worldview, likely cloudy" onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'hint',style:'padding:20px',textContent:'Photo not reachable right now.'}))"><span class="chip tag">Photo</span></div>
         <figcaption><b>Ordinary photo</b><span class="lbl">NASA Worldview · ${dshort(R.window.after[0])}</span></figcaption></figure>
     </div>
-    <div>
+    ${ag.verdict ? `<div>
       <section class="frame" style="padding:18px;display:flex;flex-direction:column;gap:14px"><h3>Water seen by each source (hectares)</h3>
         ${bar("NISAR (ours)", ag.nisar_water_ha, "background:#1D4ED8")}${bar("NASA OPERA", ag.opera_water_ha, "background:#60A5FA")}${bar("Both agree", ag.both_ha, "background:repeating-linear-gradient(90deg,#7DD3FC 0 2px,transparent 2px 5px);border:1px solid #7DD3FC")}
 </section>
-
-    </div></div>`);
+    </div>` : ""}</div>`);
   $("#back").onclick = () => go("answer");
 }
 
@@ -947,6 +1042,7 @@ function renderNotEnough(msg, detail) {
   $("#neWatch").onclick = addWatch; $("#neDate").onclick = () => go("ask"); $("#neArea").onclick = () => go("find");
 }
 function renderError(err, from) {
+  if (err && err.notInDemo) return renderNotInDemo();
   ui(`<aside class="side right frame" style="width:460px" role="alert">
     <div class="screenhead"><div><h1 style="color:#FCA5A5">${err.offline ? "We can’t reach the server" : "Something went wrong"}</h1></div></div>
     <p>${err.offline ? "The app isn’t responding right now. Please check it’s still running and try again." : "We couldn’t finish this one. Please try again, or pick another place or date."}</p>

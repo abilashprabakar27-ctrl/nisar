@@ -1,0 +1,23 @@
+{
+ "cleanUrls": false,
+ "headers": [
+  {
+   "source": "/files/(.*)",
+   "headers": [
+    {
+     "key": "Cache-Control",
+     "value": "public, max-age=86400"
+    }
+   ]
+  },
+  {
+   "source": "/content/(.*)",
+   "headers": [
+    {
+     "key": "Cache-Control",
+     "value": "no-cache"
+    }
+   ]
+  }
+ ]
+}

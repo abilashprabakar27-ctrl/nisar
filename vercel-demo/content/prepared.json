@@ -1,0 +1,107 @@
+{
+ "places": [
+  {
+   "key": "a26fddac73226d52",
+   "name": "Patna, Bihar",
+   "bbox": [
+    85.0,
+    25.35,
+    85.25,
+    25.6
+   ],
+   "event_date": "2026-09-07",
+   "window": [
+    "2026-08-31",
+    "2026-09-12"
+   ],
+   "story": "September 2026 Bihar floods (Punpun river)",
+   "availability": {
+    "enough_data": true,
+    "verdict": "Enough data",
+    "best_track": {
+     "track": "98",
+     "direction": "A",
+     "passes": 12,
+     "dates": [
+      "2026-06-20",
+      "2026-07-02",
+      "2026-07-14",
+      "2026-07-26",
+      "2026-08-19",
+      "2026-08-31",
+      "2026-09-12",
+      "2026-09-24",
+      "2026-10-06",
+      "2026-10-18",
+      "2026-10-30",
+      "2026-11-11"
+     ],
+     "quality": [
+      "Provisional",
+      "Unknown"
+     ],
+     "polarizations": [
+      "HH",
+      "HV"
+     ]
+    },
+    "tracks": [
+     {
+      "track": "98",
+      "direction": "A",
+      "passes": 12,
+      "dates": [
+       "2026-06-20",
+       "2026-07-02",
+       "2026-07-14",
+       "2026-07-26",
+       "2026-08-19",
+       "2026-08-31",
+       "2026-09-12",
+       "2026-09-24",
+       "2026-10-06",
+       "2026-10-18",
+       "2026-10-30",
+       "2026-11-11"
+      ],
+      "quality": [
+       "Provisional",
+       "Unknown"
+      ],
+      "polarizations": [
+       "HH",
+       "HV"
+      ]
+     }
+    ],
+    "total_passes": 12,
+    "gap": {
+     "start": "2026-07-27",
+     "end": "2026-08-10"
+    },
+    "can_answer": {
+     "now": true,
+     "change": true,
+     "diff": true,
+     "much": true,
+     "why": true
+    },
+    "newest_pass": "2026-11-11"
+   }
+  }
+ ],
+ "stories": [
+  {
+   "name": "Patna, Bihar",
+   "bbox": [
+    85.0,
+    25.35,
+    85.25,
+    25.6
+   ],
+   "event_date": "2026-09-07",
+   "story": "September 2026 Bihar floods (Punpun river)"
+  }
+ ],
+ "sample": "9cc795db09c8dbc3"
+}
