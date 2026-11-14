@@ -1,6 +1,6 @@
 # Form answers: NISAR Change Explorer
 
-Plain text, ready to paste. Numbers are from the saved results as of 14 Nov 2026.
+Plain text, ready to paste. Describes the app that ships (`backend/`, method `water-change-v5-reliability-checks`). Numbers are measured results as of 15 Nov 2026; sources are in docs/ACCURACY_FINAL.md.
 
 ## Detailed description with objective
 
@@ -8,63 +8,64 @@ Plain text, ready to paste. Numbers are from the saved results as of 14 Nov 2026
 
 **The problem.** Floods arrive with cloud and rain, so ordinary satellite photos are often useless exactly when people need them. NISAR's L-band radar sees through cloud and at night. But each pass is a 2 to 7 GB file, the raw numbers need speckle filtering and terrain masking, and most tools hide how uncertain the result is.
 
-**What we built.** A web app. You pick a place on the map and ask what changed. The server compares a few passes from before with a few from after, taken from the same orbit track, direction and frame. It returns:
+**What we built.** A web app. You pick a place on the map and ask what changed. The server compares two passes from before with two from after, from the same orbit track. It returns:
 
 - a map of where water likely appeared and where it likely went away
 - the area in hectares
 - a confidence level (High, Medium or Lower) with the reason
-- a check against NASA's own OPERA water maps: overlap, precision and recall
+- a check against NASA's own OPERA water maps where they exist
+- a validation block: what was measured, where the method is known to fail, and whether this place was checked at all
 - the weeks of data we do not have, and the limits that apply to this place
-- driver evidence: whether heavy rain (GPM IMERG) or flat low-lying land fits the change, each marked Likely, Possible or Not supported, and always as interpretation
 
-**How the science works.** We read only the area asked for (25 x 25 km at most) from each file using range reads. We apply NISAR's validity mask and a 5x5 Lee speckle filter, and mask permanent water (JRC) and steep slopes (Copernicus DEM). Each side becomes a median composite of 2 to 3 passes. We take the log-ratio in decibels, threshold it with Otsu's method, call a pixel water if the after-image is darker than the water threshold, and drop patches under 1 hectare.
+The app also lists recent floods and storms from public feeds (NASA EONET, GDACS, USGS, Copernicus EMS) and checks whether NISAR has passes before and after each one.
 
-**The honesty rules.** The app never says "confirmed". If there are fewer than two good passes on either side, or more than 30% of the area is masked, it says "insufficient data" and gives no number. High confidence needs the change on at least two passes. Sample data is always labelled as sample. The permanent gap in NISAR data (27 July to 10 August 2026) is never filled in.
+**How the science works.** We read only the area asked for (25 x 25 km at most) from each file using range reads, resample to a 20 m grid, apply NISAR's validity mask and a 7x7 Lee speckle filter, and mask steep slopes (Copernicus DEM). Water is where HH is below -14.5 dB and HV below -20.5 dB. A pixel "became water" if it dropped by at least 3 dB, was clearly not water before (at least 1 dB darker than the cut-off), and is dark on every after pass. Patches under 1 hectare are dropped.
+
+**The honesty rules.** The app never says "confirmed". If there are fewer than two good passes on either side, or more than 30% of the area is masked, it says "insufficient data" and gives no number. High confidence needs persistence and at least 75% confirmation by OPERA. Confidence is lowered when one pass is more than 1.5 dB brighter or darker than the others, when the place has not been validated, when the area is under 100 ha, or when most new water lies on cropland with no independent confirmation. Sample data is always labelled as sample. The permanent gap in NISAR data (27 July to 10 August 2026) is never filled in.
 
 ## Feasibility
 
 It already runs on real data, so feasibility is shown, not assumed.
 
-- **Technical.** Everything uses open data and open tools: Python, FastAPI, xarray, numpy, scipy, rasterio and h5py. A 24 km window reads from a 2 to 7 GB file in about 2 seconds, so nothing needs to be downloaded whole. Results are cached, so demo areas come back instantly.
-- **Data access.** NISAR GCOV is free through the ASF DAAC with a NASA Earthdata login. OPERA, IMERG, JRC, Copernicus DEM and WorldCover are all open.
-- **Accuracy, stated plainly.** On our Tonle Sap test window in Cambodia, our water map agrees with OPERA with an overlap (IoU) of 0.72, precision 0.90 and recall 0.79, over the 51% of the window where OPERA could be compared. On a neighbouring window to the south, the same settings reached only 0.37 overlap and 0.39 precision, because they over-predict water there. So we claim the method works where it was tuned and checked, and nothing wider than that.
-- **Risks we know about.** Thresholds were tuned on one site and one season. OPERA is a reference, not ground truth. Flooded forest can brighten in HH and look like no change. Smoothing shrinks patch edges by about 2 pixels, so areas are slightly under-counted.
+- **Technical.** Everything uses open data and open tools: Python, FastAPI, numpy, scipy, rasterio and h5py. A small window reads from a 2 to 7 GB file without downloading it whole. Results are cached, so demo areas come back instantly.
+- **Data access.** NISAR GCOV is free through the ASF DAAC with a NASA Earthdata login. OPERA, Copernicus DEM, ESA WorldCover and the calamity feeds are open without a login.
+- **Accuracy, stated plainly.** On our Tonle Sap test window in Cambodia, our "became water" map agrees with OPERA with an overlap (IoU) of 0.68, precision 0.88 and recall 0.74, over the 51% of the window where OPERA could be compared. The held-out east half scored 0.68 / 0.88 / 0.75. But on the window just south, the same settings scored 0.55 / 0.58 / 0.91 against OPERA, and an independent Sentinel-2 optical check disagreed more: precision 0.15. On a fresh window further south the IoU was 0.04, and at Kanpur the Sentinel-2 check found far more new water than we did (recall 0.03). Scene-calibrated thresholds, which we tried as a fix, failed. So we claim the method works where it was checked, and nothing wider than that.
+- **Risks we know about.** The method is checked on one season and one track. OPERA and Sentinel-2 are second opinions, not ground truth. The confidence limits (100 ha, 1.5 dB, 50% cropland) are provisional, from two observed failures, and the cropland rule was refined after we saw a result. No accuracy against human-labelled points has been measured, and there is no L-band benchmark.
 - **Cost and scale.** No paid services. A run needs a laptop-class machine. Scaling to more places means adding areas and checking each one, not new technology.
 
 ## What is ALREADY done
 
-- A tested analysis pipeline: finding passes, reading windows, filtering, masking, compositing, change detection, area counting, confidence rules and the insufficient-data rule. 83 automated tests pass, on synthetic scenes where the right answer is known.
-- A working API with place search, availability, background analyses with progress events, and the OPERA agreement check, plus an honesty gate that rejects results that break the wording rules.
-- Real data processed: 22 NISAR GCOV passes (37 GB) for two sites, Tonle Sap in Cambodia and the Nile Sudd in South Sudan.
-- **Tonle Sap:** about 10,500 ha likely became water, about 340 ha likely receded, and about 240 ha likely flooded vegetation, with Medium confidence. Checked against OPERA: overlap 0.72, precision 0.90, recall 0.79.
-- **Nile Sudd:** about 170 ha likely became water and about 1,200 ha likely receded, with permanent-water and slope masks applied (6.6% masked). It is clearly labelled **unvalidated** because no independent check has been run yet.
-- A per-pass timeline. For Tonle Sap, water area rises from about 2,000 ha on 25 July to a peak near 11,200 ha on 5 October. These are single passes, labelled as context.
-- Rainfall evidence: 153 days of GPM IMERG rain (1 June to 31 October) for 13 areas, and rain and terrain driver rules.
-- A bbox-aware availability check: it tells you whether we have checked NISAR coverage in a place, and says so honestly when we have not.
-- Both demo areas are pre-computed and saved, so they return instantly with their OPERA comparison attached.
-- A 7-slide presentation, written documentation, an architecture description and a handoff note.
+- A tested analysis pipeline and API: finding passes, reading windows, filtering, masking, change detection, area counting, the OPERA check, confidence rules and the insufficient-data rule. 42 automated tests pass, on synthetic scenes and fixtures where the right answer is known, including that permanent water cannot confirm new water.
+- Honest, calibrated confidence: reliability checks on pass brightness, land cover (ESA WorldCover) and validation status, and a validation block in every result.
+- A recent-calamity feed with a NISAR coverage check (EONET, GDACS, USGS, Copernicus EMS), tested on the real events of the last 45 days.
+- Real accuracy tests with failures reported: Tonle Sap against OPERA (IoU 0.68, precision 0.88, recall 0.74), held-out and fresh windows, Sentinel-2 checks on the south neighbour and Kanpur, and a test of scene-calibrated thresholds on the Sen1Floods11 human-labelled set. Scene calibration tied a fixed cut-off on average and did not clearly beat it. That dataset is C-band, so it tests the recipe, not a NISAR threshold. Every experiment, including the ones that failed, is logged.
+- Two flood stories run on real NISAR data: Kanpur, Uttar Pradesh (68 ha new water; 58 ha, 86%, is water in OPERA; how much we missed is not measured) and Morigaon, Assam (3,299 ha new water, no independent check available).
+- Presentation and written documentation.
 
 ## Future implementation plan
 
-**Before the deadline (what is left of this weekend):**
-1. Hand-label about 90 check points on a clear Sentinel-2 image and score the result against them. They are never used to set thresholds. This gives an accuracy number that does not depend on OPERA.
-2. Download OPERA water maps for the Nile Sudd and score it, so it can leave "unvalidated".
-3. Serve the driver evidence from the API, so the frontend can show "why did it change".
-4. Re-check every number shown in the app against the saved results before the feature freeze.
+Full list with reasons, data, effort and risk: docs/ROADMAP.md.
+
+**Next:**
+1. A human checks a set of labelled points on clear Sentinel-2 images. This gives an accuracy number that does not depend on OPERA. The points are never used to set thresholds.
+2. Build agreement labels (where OPERA and Sentinel-2 both agree) across the saved areas, to find where the method fails.
+3. Fix the two known failures: the south neighbour and the cropland plains south of Tonle Sap.
+4. Run the recent events (Crete EMSR933, Cyclone ARNAB-26, Uruguay River floods) once an Earthdata token is available.
+5. Check the Nile Sudd against OPERA, so it can leave "unvalidated".
 
 **After this event:**
-1. Add two more sites, Sylhet haor in Bangladesh and the Mamirauá reserve in the Amazon, and validate each. This tests whether our thresholds transfer, which the southern Tonle Sap result says is the biggest open question.
-2. Tune thresholds per site type, using separate tuning and checking areas, and publish the accuracy for each.
-3. Add the other drivers: river discharge (GloFAS), fire hotspots (FIRMS), earthquakes (USGS).
-4. Add experimental layers, clearly labelled: ground movement from NISAR GUNW, and vegetation loss from the HV channel.
-5. Add a tile server and a stronger job queue so more people can use it at once.
+1. Train a classifier that is scored by leaving one site out, with probabilities that are checked against measured accuracy. We will only keep it if it beats the fixed method on sites it has not seen.
+2. Try wind, soil-moisture and water-height data (ERA5, SMAP, SWOT) as extra evidence.
+3. Check the licence of every dataset before sharing any of it.
 
 ## References
 
 - NISAR L2 GCOV, NASA/JPL, distributed by the ASF DAAC: https://asf.alaska.edu
 - OPERA DSWx-S1 and DSWx-HLS, NASA Earthdata: https://www.earthdata.nasa.gov
-- GPM IMERG V07 daily precipitation, NASA GES DISC: https://gpm.nasa.gov
+- Sentinel-2 L2A, ESA/Copernicus, via AWS Earth Search
+- Sen1Floods11 (Bonafilia et al. 2020), for the threshold-recipe test
 - Copernicus DEM GLO-30, ESA/Copernicus: https://spacedata.copernicus.eu
-- JRC Global Surface Water, European Commission Joint Research Centre: https://global-surface-water.appspot.com
 - ESA WorldCover 2021, ESA: https://esa-worldcover.org
+- JRC Global Surface Water, European Commission Joint Research Centre: https://global-surface-water.appspot.com
+- NASA EONET, GDACS, USGS earthquake feed and Copernicus EMS Rapid Mapping, for recent events
 - OpenStreetMap Nominatim, for place search: https://nominatim.openstreetmap.org
