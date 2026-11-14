@@ -213,6 +213,10 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
         label, hect = "No clear change", 0.0
         measured = "No area larger than 1 hectare changed beyond the 3 dB threshold."
         interpreted = "The surface looks about the same in both groups of passes."
+        if level == "High":   # "the change shows on both later passes" makes no sense when nothing changed
+            level, reason = "Medium", ("Why medium: no change larger than 1 hectare was found with "
+                                       f"{len(before)} passes before and {len(after)} after. Small or short-lived "
+                                       "changes can still be missed.")
 
     drv = drivers.all_drivers(folder, bbox, r.classes, grid.res, [p.date for p in before],
                               [p.date for p in after], dem=dem, online=online)
