@@ -145,7 +145,7 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
 
     # 5. Verify
     prog.step(4, pct=80)
-    agreement = verify.run(r.classes, grid, bbox, after[0].date, folder, online=online,
+    agreement = verify.run(r.classes, grid, bbox, after[-1].date, folder, online=online,   # OPERA nearest the LAST after pass (the water must persist to it)
                            ours_water=r.first_after_water)
 
     # 6. Explain
