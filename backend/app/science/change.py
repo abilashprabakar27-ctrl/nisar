@@ -186,17 +186,17 @@ def confidence(n_before: int, n_after: int, persistence: float, overlap_pct: flo
     """Rules from the Night Shift 1 pack."""
     reasons = []
     if "Beta" in qualities:
-        return "Lower", "Uses Beta-quality NISAR data, which is still being calibrated."
+        return "Lower", "Some of the satellite images are early versions, so treat this with care."
     if masked_fraction > 0.15:
-        return "Lower", f"{masked_fraction:.0%} of the area could not be read (radar shadow, steep slopes or no data)."
+        return "Lower", "Part of the area couldn't be seen clearly."
     if overlap_pct is not None and overlap_pct < 50:
-        return "Lower", f"Only {overlap_pct:.0f}% overlap with NASA's OPERA water map."
+        return "Lower", "Another satellite's water map sees this area quite differently, so treat it with care."
     high = n_before >= 2 and n_after >= 2 and persistence >= 0.8 and (overlap_pct is None or overlap_pct >= 75)
     if high:
-        reasons.append("the change shows on both later passes")
+        reasons.append("the change shows up in more than one later image")
         if overlap_pct is not None:
-            reasons.append(f"NASA's OPERA water map agrees ({overlap_pct:.0f}% overlap)")
+            reasons.append("another satellite's water map backs it up")
         return "High", "Why high: " + " and ".join(reasons) + "."
     if persistence < 0.8:
-        return "Medium", "Part of the new water appears on only one of the later passes."
-    return "Medium", f"Moderate agreement with NASA's OPERA water map ({overlap_pct:.0f}% overlap)."
+        return "Medium", "Some of the new water only shows up in one of the later images."
+    return "Medium", "Another satellite's water map only partly backs this up."

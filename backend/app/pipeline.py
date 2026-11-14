@@ -214,20 +214,17 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
         measured = "No area larger than 1 hectare changed beyond the 3 dB threshold."
         interpreted = "The surface looks about the same in both groups of passes."
         if level == "High":   # "the change shows on both later passes" makes no sense when nothing changed
-            level, reason = "Medium", ("Why medium: no change larger than 1 hectare was found with "
-                                       f"{len(before)} passes before and {len(after)} after. Small or short-lived "
-                                       "changes can still be missed.")
+            level, reason = "Medium", "We didn't spot any big change, though very small ones could be missed."
 
     drv = drivers.all_drivers(folder, bbox, r.classes, grid.res, [p.date for p in before],
                               [p.date for p in after], dem=dem, online=online)
 
-    limits = ["Results are estimates from radar; very wet soil can look like water.",
-              "Areas in radar shadow or on steep slopes are masked out."]
+    limits = ["These are estimates. Very wet fields can sometimes look like water.",
+              "Some spots, like steep hillsides, can't be seen clearly and are left out."]
     if any(q != "Validated" for q in qualities):
-        limits.append("Some NISAR data used is " + "/".join(q for q in qualities if q != "Validated") +
-                      " quality; numbers may shift slightly when reprocessed.")
+        limits.append("Some of the satellite images are early versions, so the numbers may change a little later.")
     if before[-1].date <= config.DATA_GAP[1] and after[0].date >= config.DATA_GAP[0]:
-        limits.append("No NISAR images exist 27 Jul - 10 Aug 2026; nothing is filled in.")
+        limits.append("There are no satellite images from 27 Jul to 10 Aug 2026, and we don't guess what's missing.")
 
     result = {
         "id": key, "status": "done", "source": "live",

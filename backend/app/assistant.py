@@ -24,10 +24,12 @@ def answer(res: dict, q: str) -> dict:
 
     if re.search(r"rain|wet|soil|weather", t):
         rain = next((d for d in drivers if d["name"] == "Heavy rain"), None)
-        txt = ("Very wet soil can darken radar for one pass, which looks like water. We only count water that "
-               "is dark on both later passes, in both HH and HV. ")
-        if rain:
-            txt += f"Rain evidence: {rain['evidence']} Verdict: {rain['verdict']}."
+        if not rain or rain["verdict"] == "Not checked":
+            txt = "We couldn't check the rainfall for this place, so we can't say yet."
+        elif rain["verdict"] in ("Likely", "Possible"):
+            txt = f"Quite possibly. {rain['evidence']}"
+        else:
+            txt = f"Probably not on its own. {rain['evidence']}"
         return out(txt, ["rainfall (" + (rain or {}).get("source", "not loaded") + ")"])
     if re.search(r"agree|opera|other source|nasa|compare|check", t):
         if "overlap_pct" in ag:
@@ -38,23 +40,27 @@ def answer(res: dict, q: str) -> dict:
         return out("The NASA OPERA comparison was not available for this result, so we can't say yet.")
     if re.search(r"sure|confiden|accura|trust|right", t):
         acc = res.get("accuracy")
-        txt = f"Confidence is {conf.get('level', 'unknown')}. {conf.get('reason', '')}"
-        if acc:
-            txt += f" On {acc['points']} hand-checked points: precision {acc['precision_pct']}%, recall {acc['recall_pct']}%."
+        lvl = conf.get('level', '')
+        lead = {"High": "Fairly sure.", "Medium": "Reasonably sure.", "Lower": "Not very sure, so treat this with care."}.get(lvl, "")
+        reason = conf.get('reason', '')
+        for pre in ('Why high: ', 'Why medium: ', 'Why lower: '):
+            reason = reason.replace(pre, '')
+        reason = reason[:1].upper() + reason[1:]
+        txt = f"{lead} {reason}".strip()
         return out(txt, ["confidence rules", "check points" if acc else "no check points yet"])
     if re.search(r"wrong|limit|error|mistake", t):
         return out(" ".join(res.get("limits", [])) or "No limits recorded.", ["limits"])
     if re.search(r"why|cause|reason", t):
         top = [d for d in drivers if d["verdict"] in ("Likely", "Possible", "Supporting")]
         if not top:
-            return out("No cause has supporting evidence yet. This is interpretation, not a measurement.")
-        parts = [f"{d['name']} ({d['verdict'].lower()}): {d['evidence']}" for d in top[:3]]
-        return out("Interpretation, not a measurement. " + " ".join(parts), [d["source"] for d in top[:3]])
+            return out("Nothing clearly explains it yet.")
+        parts = [f"{d['name']}: {d['evidence']}" for d in top[:3]]
+        return out("Our best guess. " + " ".join(parts), [d["source"] for d in top[:3]])
     if re.search(r"gone|reced|drain|down|now", t):
-        return out(f"Between the before and after passes, {_f(areas.get('water_receded'), ' ha')} looks like water that "
-                   f"drained away and {_f(areas.get('became_water'), ' ha')} looks like new water. "
-                   f"Water in the area went from {_f(res.get('water_ha', {}).get('before'), ' ha')} to "
-                   f"{_f(res.get('water_ha', {}).get('after'), ' ha')}.", ["water per pass"])
+        rec = areas.get('water_receded') or 0
+        if rec < 1:
+            return out("No, not in any noticeable way. The water only spread between these dates.", ["water"])
+        return out(f"Yes, about {_f(rec, ' hectares')} dried out, while {_f(areas.get('became_water'), ' hectares')} went under water.", ["water"])
     if re.search(r"how much|area|hectare|big|size|pitch", t):
         return out(f"{_f(h.get('hectares'), ' ha')} ({h.get('label', '').lower()}), about "
                    f"{_f(h.get('football_pitches'))} football pitches or {h.get('share_of_area_pct', '?')}% of the study area.")
