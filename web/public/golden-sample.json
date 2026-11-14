@@ -1,0 +1,26 @@
+{
+  "dataMode": "sample",
+  "area": { "name": "Morigaon, Assam", "center": [92.34, 26.25], "hectares": 25200 },
+  "availability": {
+    "enough": true,
+    "goodPasses": 11,
+    "validated": 2,
+    "provisional": 9,
+    "dropped": 1,
+    "track": "069",
+    "passes": [
+      { "date": "2026-06-19", "quality": "validated" },
+      { "date": "2026-07-01", "quality": "validated" },
+      { "date": "2026-07-13", "quality": "provisional" },
+      { "date": "2026-08-18", "quality": "provisional" },
+      { "date": "2026-08-30", "quality": "provisional" },
+      { "date": "2026-09-11", "quality": "provisional" },
+      { "date": "2026-09-23", "quality": "provisional" },
+      { "date": "2026-10-05", "quality": "provisional" },
+      { "date": "2026-10-17", "quality": "provisional" },
+      { "date": "2026-10-29", "quality": "provisional" },
+      { "date": "2026-11-10", "quality": "provisional" }
+    ],
+    "gap": { "from": "2026-07-27", "to": "2026-08-10" }
+  }
+}
