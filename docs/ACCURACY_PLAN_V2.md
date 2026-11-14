@@ -41,3 +41,31 @@ Goal: a result we can defend. Two things move that: (1) independent evidence tha
 - Spot-check 20 of the AI labels (about 15 minutes).
 - Paste the challenge page's resource list into `docs/RESOURCES.md`.
 - Revoke the Earthdata token (still pending).
+
+---
+# v3 additions: answer-key data, best-of-all answers, recent calamities
+
+## 1. Answer-key data (find, fetch, split into tune / test)
+Labelled flood data exists online, mostly Sentinel-1 (C-band) or optical, not NISAR (L-band). So it cannot tune NISAR thresholds directly. It can: (a) test the change-detection logic and the confidence calibration, (b) give analyst-made flood extents for NISAR-era events (Copernicus EMS, from June 2026 on), which are the best answer key for the real task.
+Candidates to check: Sen1Floods11 (hand-labelled), UrbanSARFloods, MMFlood, WorldFloods, Copernicus EMS rapid-mapping flood delineations 2026, Global Flood Database, Dartmouth Flood Observatory, OPERA DSWx (already used). Output: `docs/DATASETS.md` with source, labels, licence, size, whether it can be used for tuning or only testing, and the C-band caveat. A sealed test set is kept apart and never used to tune.
+
+## 2. Best answer for each search and question
+Each answer fuses every source that exists for that place and date, and reports how many independent sources agree:
+| Source | Role |
+|---|---|
+| NISAR GCOV change (ours) | primary |
+| OPERA DSWx-S1 / HLS | second opinion (C-band / optical) |
+| Sentinel-2 optical (clear scenes) | independent check when cloud allows |
+| JRC, DEM, WorldCover | permanent water, terrain, land type |
+Confidence is calibrated: the score maps to the precision we actually measured on held-out data for that kind of place, with an interval. Where we have no measurement for the place type, the answer says so and drops the level. Each question type (what changed, how much, why, what is here now) names which sources it used.
+
+## 3. Recent natural calamities
+A feed of recent events (NASA EONET, GDACS, USGS, Copernicus EMS where open) filtered to floods, storms and quakes, each checked against NISAR coverage and date gaps, with a one-click analysis and an honest "no NISAR pass yet" state. Tested on the real events of the last weeks.
+
+## Stages
+| Stage | Work |
+|---|---|
+| E | Find, fetch and catalogue answer-key data, split tune / test (agent, web) |
+| F | Recent-calamity feed: API, availability check, UI entry in Stories (agent) |
+| G | Fusion and calibrated confidence from E and the Sentinel-2 evidence (after A and B) |
+| H | Test on the latest real events, report how it behaves, including failures |
