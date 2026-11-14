@@ -180,3 +180,9 @@ def test_result_has_credits():
     r = c.get("/sample?rebuild=true").json()
     titles = [s["title"] for s in r["credits"]["sources"]]
     assert "ASF Data Search Vertex" in titles
+
+
+def test_tiny_new_water_cannot_be_high():
+    lvl, why = change.confidence(2, 2, 1.0, 87, 0.05, ["Provisional"], new_water_ha=68.0)
+    assert lvl == "Medium" and "too little" in why
+    assert change.confidence(2, 2, 1.0, 87, 0.05, ["Provisional"], new_water_ha=3000.0)[0] == "High"

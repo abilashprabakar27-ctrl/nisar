@@ -45,6 +45,7 @@ HYST_MAX_PX = int(os.getenv("NCE_HYST_MAX_PX", "5"))               # growth limi
 REQUIRE_PERSISTENT = os.getenv("NCE_REQUIRE_PERSISTENT", "1") == "1"   # new water must be water on every after pass
 AFTER_VAR_MAX_DB = float(os.getenv("NCE_AFTER_VAR_MAX_DB", "0"))       # >0: drop new water whose after passes differ by more (wet fields flicker)
 MIN_PATCH_HA = 1.0
+MIN_HIGH_CONF_HA = 100.0         # less new water than this can never be High confidence
 MAX_AREA_KM2 = float(os.getenv("NCE_MAX_AREA_KM2", "900"))   # about 30 x 30 km
 TARGET_RES_M = float(os.getenv("NCE_TARGET_RES_M", "20"))
 FOOTBALL_PITCH_HA = 0.714

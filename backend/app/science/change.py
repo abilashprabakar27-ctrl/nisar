@@ -198,7 +198,7 @@ def water_area_series(passes_db: list[np.ndarray], threshold_db: float, pixel_ha
 
 
 def confidence(n_before: int, n_after: int, persistence: float, overlap_pct: float | None,
-               masked_fraction: float, qualities: list[str]) -> tuple[str, str]:
+               masked_fraction: float, qualities: list[str], new_water_ha: float | None = None) -> tuple[str, str]:
     """Rules from the Night Shift 1 pack.
 
     overlap_pct must be the STRICT figure (share of our *new* water that OPERA confirms, verify.compare), never
@@ -212,6 +212,9 @@ def confidence(n_before: int, n_after: int, persistence: float, overlap_pct: flo
     if overlap_pct is not None and overlap_pct < 50:
         return "Lower", f"Only {overlap_pct:.0f}% overlap with NASA's OPERA water map."
     high = n_before >= 2 and n_after >= 2 and persistence >= 0.8 and overlap_pct is not None and overlap_pct >= 75
+    if high and new_water_ha is not None and new_water_ha < config.MIN_HIGH_CONF_HA:
+        return "Medium", (f"Only {new_water_ha:.0f} ha of new water was found, too little to call High: agreement with "
+                          f"OPERA on a small area says what we found is probably right, not that the whole change was mapped.")
     if high:
         reasons.append("the change shows on both later passes")
         if overlap_pct is not None:

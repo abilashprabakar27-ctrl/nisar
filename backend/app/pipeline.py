@@ -190,7 +190,8 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
     elif agreement:
         agree_out = agreement
 
-    level, reason = change.confidence(len(before), len(after), r.persistence, overlap, r.masked_fraction, qualities)
+    level, reason = change.confidence(len(before), len(after), r.persistence, overlap, r.masked_fraction, qualities,
+                                       new_water_ha=r.areas_ha.get("became_water"))
 
     all_dates = [p.date for p in before + after]
     db_all = [change.lee_filter(change.to_db(hh[d])) for d in all_dates]
