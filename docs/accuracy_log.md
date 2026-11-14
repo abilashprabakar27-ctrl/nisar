@@ -199,3 +199,6 @@ Honest limits of these checks:
 - With 2 passes per side, a flagged pass needs a 3 dB gap between the two members of its group, so the check is weak with few passes.
 - No human-labelled accuracy exists; the field reads "not measured".
 - Tests: `backend/tests/test_reliability.py` (synthetic inputs, WorldCover read monkeypatched offline). WorldCover tile name verified live (N12E102 for Tonle Sap).
+
+### Refinement to the cropland cap (made after seeing the first result, so treat as post hoc)
+The first v5 run demoted the Tonle Sap main window to Lower because 53% of its new water is on cropland. That window is the best-validated one (IoU 0.68; OPERA confirms 88% of the new water), and its floodplain really does flood its paddies. The only evidence behind the cap was a window where OPERA also failed (5% overlap), so the cap now applies only when no independent reference confirms the new water (OPERA missing or under 75%). Effect on the real cases: Tonle Sap main is no longer capped by cropland; Morigaon (97% cropland, no OPERA) and the fresh south window (58%, OPERA 5%) stay Lower. This change was chosen after seeing the outcome, so it is not an independent result.

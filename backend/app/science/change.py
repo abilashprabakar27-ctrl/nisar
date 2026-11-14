@@ -288,7 +288,10 @@ def confidence(n_before: int, n_after: int, persistence: float, overlap_pct: flo
         return "Lower", f"{masked_fraction:.0%} of the area could not be read (radar shadow, steep slopes or no data)."
     if overlap_pct is not None and overlap_pct < 50:
         return "Lower", f"Only {overlap_pct:.0f}% overlap with NASA's OPERA water map."
-    if cropland_share is not None and cropland_share > CROPLAND_SHARE_MAX:
+    # the cropland cap stands in for a missing check: where OPERA confirms the new water (>= 75%), a flooded floodplain
+    # of paddies is real flooding, so the cap applies only when no independent reference backs the new water
+    if (cropland_share is not None and cropland_share > CROPLAND_SHARE_MAX
+            and (overlap_pct is None or overlap_pct < 75)):
         return "Lower", ("Most detected new water lies on cropland, where radar cannot separate a flood from irrigated or "
                          f"flooded paddies; this kind of place failed validation ({cropland_share:.0%} of the new water is on cropland).")
     high = n_before >= 2 and n_after >= 2 and persistence >= 0.8 and overlap_pct is not None and overlap_pct >= 75

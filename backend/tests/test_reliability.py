@@ -61,8 +61,13 @@ def test_landcover_shares_and_lower():
     wc[:, 3] = 50                                   # 10 built-up
     lc = change.landcover_shares(classes, wc)
     assert lc["checked"] and lc["cropland_share"] == 0.75 and lc["builtup_share"] == 0.25
-    lvl, why = conf(cropland_share=lc["cropland_share"])
+    # no independent reference backs the new water: the cropland cap applies
+    lvl, why = change.confidence(2, 2, 1.0, None, 0.05, ["Provisional"], cropland_share=lc["cropland_share"])
     assert lvl == "Lower" and "cropland" in why and "failed validation" in why
+    # OPERA confirms 87% of the new water: a flooded paddy floodplain is real flooding, no cap
+    assert conf(cropland_share=lc["cropland_share"])[0] != "Lower"
+    # OPERA weak (<75%) on cropland: cap still applies
+    assert change.confidence(2, 2, 1.0, 60, 0.05, ["Provisional"], cropland_share=0.9)[0] == "Lower"
     assert conf(cropland_share=0.5)[0] == "High"    # not above 50%
 
 
