@@ -168,3 +168,34 @@ What this says, plainly:
 
 Re-run: `python backend/scripts/fetch_s2_reference.py` then `python backend/scripts/eval_s2.py` (same PYTHONPATH/venv as `eval_tonlesap.py`). Kanpur uses NISAR track 077 and Morigaon track 091 read from
 the pipeline cache in `team_data/cache` (NCE_DATA_DIR), no NISAR re-download; Morigaon is skipped only because there is no S2 after scene.
+
+## Reliability checks (2026-11-15, METHOD_VERSION water-change-v5-reliability-checks)
+
+The detection itself is unchanged (same pixels, same areas). What changed is how honest the confidence is about where the method is known to fail.
+Three fail-soft checks (data missing -> "not checked", never an error) feed `change.confidence()`; the old rules are kept. Numbers go in `provenance`, plain sentences in `limits`.
+
+| check | rule | effect | source of the number |
+|---|---|---|---|
+| A. Radiometric stability | median HH (dB, Lee-filtered) per pass over pixels that are land in every pass (never water, not masked); a pass more than 1.5 dB from the median of all passes is flagged | plain limit "pass DATE is N dB brighter/darker than the others ... open water may be missed on that date"; a flagged pass cannot be High (cap Medium) | Kanpur 23 Sep seen about 3 dB brighter than other passes (wind/rain/soil moisture), recall 0.03 vs Sentinel-2 |
+| B. Land cover | ESA WorldCover 10 m v200 2021 (open COG on AWS, window read only); share of 'became water' on cropland (40) and built-up (50) | cropland share above 50% -> not above Lower, with the reason "most detected new water lies on cropland ... this kind of place failed validation" | cropland plains south of Tonle Sap: 301k px predicted vs 15k in OPERA, IoU 0.04 |
+| C. Validation status | `validation` block in every result: what was measured (Tonle Sap window vs OPERA: IoU 0.68, precision 0.88, recall 0.74), known failures, `this_place` ("validated against OPERA on one window and season" only if the bbox lies inside 103.90-104.12 E, 13.05-13.27 N, else "not validated"), `human_labelled_accuracy: "not measured"` | "not validated" place cannot be High (cap Medium); the small-area cap (100 ha) is kept | docs/accuracy_log.md, docs/GENERALISATION.md; nothing invented |
+
+**The limits 1.5 dB, 50% cropland and 100 ha are provisional, from 2 observed failures. They were not tuned to make any output look better and must be revisited when a labelled score exists.**
+Scene-self-calibrated thresholds were tried and failed (docs/GENERALISATION.md section 3); they are NOT implemented.
+
+Re-run of the cached real cases (checks run for real, WorldCover read live; OPERA overlap for Tonle Sap taken from the strict scores above as a stand-in, 88/58/5%):
+
+| case | new water | brightness check (offset of each pass from median of passes) | cropland share | confidence now | why |
+|---|---|---|---|---|---|
+| Tonle Sap main window | 9,719 ha | none flagged (max 0.5 dB) | 53% | Lower | cropland share above 50%. This is the best-validated window (IoU 0.68), so the blunt cropland rule demotes the one place with a good score; the diagnosis found cropland there is 92% correct. Rule kept as specified, not tuned. |
+| Tonle Sap south neighbour | 1,970 ha | none flagged (max 1.25 dB) | 6% | Medium | OPERA 58%, not validated place; the Sentinel-2 precision of 0.15 is NOT caught by any of the three checks |
+| Tonle Sap fresh window (0.44 deg south) | 14,522 ha | none flagged | 58% | Lower | OPERA overlap 5%; also cropland above 50% |
+| Kanpur 77 D (30 Aug, 11 Sep / 23 Sep, 5 Oct) | 68 ha | none flagged: 23 Sep is only +0.54 dB on stable land | 49% (just under the limit) | Medium | no OPERA check (the OPERA call fails offline here: AttributeError), place not validated, 68 ha under 100 ha |
+| Morigaon 91 D (20 Jun, 2 Jul / 14 Jul, 26 Jul) | 3,299 ha | none flagged | 97% | Lower | most new water on cropland (earlier: Medium) |
+
+Honest limits of these checks:
+- **Check A did not reproduce the Kanpur ~3 dB.** On land that is stable in every pass, 23 Sep is only 0.5 dB above the median of the passes. The whole-window HH median of that pass is 0.8 dB brighter and its darkest 10% is 1.7 dB brighter (-13.1 dB vs -14.8 dB), so the brightening is concentrated on the dark (water) end, which a land-only median cannot see. The check follows the pre-stated rule and is not changed; a water-end statistic would be a new rule that needs its own test.
+- Check B treats all cropland alike: it flags Tonle Sap main (good score) and Morigaon (unchecked) the same way, and misses the south neighbour (6% cropland, S2 precision 0.15). It is a warning about a failure type, not a measured error rate.
+- With 2 passes per side, a flagged pass needs a 3 dB gap between the two members of its group, so the check is weak with few passes.
+- No human-labelled accuracy exists; the field reads "not measured".
+- Tests: `backend/tests/test_reliability.py` (synthetic inputs, WorldCover read monkeypatched offline). WorldCover tile name verified live (N12E102 for Tonle Sap).
