@@ -117,3 +117,54 @@ Notes:
 - The method over-predicts new water on the south neighbour (precision 0.59 vs 0.85 on the main window), the same failure the older pipeline showed.
 - Only about half the window is comparable; the strict score says nothing about the cloudy rest, and the west half is only 29% comparable, so its numbers are noisier.
 - The tuning sample is small and OPERA-dependent; differences of a few IoU points are within noise.
+
+## Sentinel-2 independent check (2026-11-15, report only, method untouched: water-change-v4b-before-margin-persist)
+
+Reference: Sentinel-2 L2A from the open AWS Earth Search STAC, window reads only, resampled to the 20 m harness grid (`backend/scripts/fetch_s2_reference.py`,
+rasters in git-ignored `team_data/s2_reference`). Scoring: `backend/scripts/eval_s2.py` (same `detect_water_change` call, config defaults, slope mask for Tonle Sap,
+same west/east/south split as `eval_tonlesap.py`). Nothing was tuned on this data.
+
+- Water = MNDWI = (B03 - B11)/(B03 + B11) > 0; sensitivity at > 0.1 is also reported. Reflectances are floored at 1e-4 so dark water cannot flip the sign.
+- Valid = SCL not 0 no-data, 1 defective, 3 shadow, 8/9 cloud, 10 cirrus, 11 snow. Scenes are ranked by the valid share of the WINDOW (not scene cloud metadata);
+  the clearest date within +/- 6 days of any NISAR before (or after) date is used; a side with under 30% valid is declared UNUSABLE.
+- Score = our "became water" vs S2 new water (water after AND NOT water before), only where BOTH S2 scenes are valid and our method is not masked.
+- Sentinel-2 is a different sensor with its own errors: cloud edges and shadows read as water, flooded vegetation and turbid water confuse MNDWI, and the scenes are
+  up to 6 days from the NISAR passes. It is independent of NISAR and OPERA. It is not ground truth.
+
+Which dates were usable (valid share of the window, best date per side):
+
+| area | before (NISAR dates) | S2 before | after (NISAR dates) | S2 after |
+|---|---|---|---|---|
+| Tonle Sap window | 13 Jul, 25 Jul | 21 Jul, 71% | 23 Sep, 5 Oct | UNUSABLE (best 29 Sep, 13%) |
+| Tonle Sap south neighbour | same | 21 Jul, 77% | same | 29 Sep, 49% (6 d from 23 Sep) |
+| Kanpur | 30 Aug, 11 Sep | 9 Sep, 97% | 23 Sep, 5 Oct | 4 Oct, 100% |
+| Morigaon | 20 Jun, 2 Jul | 26 Jun, 81% | 14 Jul, 26 Jul | UNUSABLE (best 29 Jul, 13%) |
+
+Monsoon cloud: most S2 dates in the windows are 0-5% valid. Per-date valid shares are in `team_data/s2_reference/manifest.json`.
+
+Results (strict-style: became-water vs S2 new water; OPERA = the final strict numbers above, IoU / precision / recall):
+
+| region | S2 IoU | S2 prec | S2 recall | S2 F1 | S2 comparable | OPERA IoU / prec / recall |
+|---|---|---|---|---|---|---|
+| Tonle Sap whole / west / east | not scored: no usable after scene | | | | | 0.68 / 0.88 / 0.74 (west 0.69/0.90/0.74, east 0.68/0.88/0.75) |
+| south neighbour (MNDWI > 0) | 0.14 | 0.15 | 0.83 | 0.25 | 40% | 0.55 / 0.58 / 0.91 |
+| south neighbour (MNDWI > 0.1) | 0.14 | 0.15 | 0.83 | 0.25 | 40% | same |
+| Kanpur (MNDWI > 0) | 0.03 | 0.14 | 0.03 | 0.05 | 97% | no OPERA number |
+| Kanpur (MNDWI > 0.1) | 0.03 | 0.15 | 0.04 | 0.06 | 97% | no OPERA number |
+| Morigaon | not scored: no usable after scene | | | | | no OPERA number |
+
+Pixel counts (20 m): south neighbour 49,230 predicted vs 8,896 S2 new water (comparable area only); Kanpur 1,646 predicted vs 7,333 S2 new water.
+The 0 vs 0.1 MNDWI threshold barely matters (about 0.2% of S2 new-water pixels change on the south window, 9% on Kanpur).
+
+What this says, plainly:
+- The south neighbour over-prediction is confirmed by an independent sensor and is worse than OPERA suggested: precision 0.15 against 0.58. Our recall there is high (0.83),
+  so the extra radar "new water" is largely not water in the optical image (likely wet or flooded fields, or S2 missing flooded vegetation; S2 cannot tell which).
+  Sanity check of the alignment: our became+permanent water vs S2 after water on the same valid pixels has IoU 0.87, so the grids line up.
+- Kanpur: our map has far fewer new-water pixels than S2 shows (recall 0.03-0.04, precision 0.14). S2 new water there is small, scattered and the S2 dates are 2 days off the
+  before pair and 1 day off the after pair, so these numbers say the two maps disagree, not which is right; no OPERA or ground check exists for Kanpur, and no DEM slope mask
+  was applied in this script for it (the pipeline applies one).
+- No independent score for the Tonle Sap main window (the one with the best OPERA numbers) or Morigaon: no clear after-flood optical scene within 6 days. We do not extend the window.
+- One season, one pass pair per area, a different sensor with its own errors, and a 49% valid reference on the south window: treat as a warning, not a measured accuracy.
+
+Re-run: `python backend/scripts/fetch_s2_reference.py` then `python backend/scripts/eval_s2.py` (same PYTHONPATH/venv as `eval_tonlesap.py`). Kanpur uses NISAR track 077 and Morigaon track 091 read from
+the pipeline cache in `team_data/cache` (NCE_DATA_DIR), no NISAR re-download; Morigaon is skipped only because there is no S2 after scene.
