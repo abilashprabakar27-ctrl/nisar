@@ -67,6 +67,8 @@ def _run(job_id: str, key: str, req: dict) -> None:
         verify = result.pop("_verify", None)
         validate_result(result)
         cache.save(key, result)
+        if verify:
+            cache.save_verify(key, verify)
         _set(job_id, status="done", step="done", result=result, verify=verify)
         _event(job_id, step="done", message="Done", done=True)
     except Exception as exc:  # report any failure to the poller
@@ -79,7 +81,9 @@ def start_analysis(key: str, req: dict) -> str:
     if cached is not None:
         if cached.get("source") != "sample":
             cached["source"] = "saved"
-        return _new("done", "done", cached, [{"step": "done", "message": "Saved result", "done": True}])
+        job_id = _new("done", "done", cached, [{"step": "done", "message": "Saved result", "done": True}])
+        _set(job_id, verify=cache.load_verify(key))
+        return job_id
     job_id = _new("queued", "queued")
     threading.Thread(target=_run, args=(job_id, key, req), daemon=True).start()
     return job_id

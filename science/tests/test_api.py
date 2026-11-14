@@ -153,3 +153,68 @@ def test_agreement(client, monkeypatch):
 def test_unknown_id_404(client):
     for p in ("", "/events", "/agreement"):
         assert client.get(f"/analyses/nope{p}").status_code == 404
+
+
+# ---- bbox-aware /availability ----
+def _aoi_catalog(tmp_path):
+    d = tmp_path / "catalog"
+    d.mkdir()
+    (d / "aoi_centres.csv").write_text("area,lat,lon\nlake,10.0,20.0\nriver,10.0,20.2\n")
+    hdr = "area,scene,date,time_utc,track,direction,frame,quality,url,size_bytes,aoi_cover,polarization,in_gap"
+    rows = [hdr]
+    for i, dt in enumerate(["2026-06-18", "2026-06-30", "2026-07-12", "2026-08-17", "2026-09-10", "2026-09-22"]):
+        rows.append(f"lake,S{i},{dt},00:00:00,5,ASCENDING,7,cfg=PR;crid=P05023,u,1,1.0,HH+HV,False")
+    rows.append("lake,SG,2026-08-01,00:00:00,5,ASCENDING,7,cfg=PR,u,1,1.0,HH+HV,True")
+    rows.append("river,R0,2026-06-18,00:00:00,9,ASCENDING,7,cfg=PR,u,1,1.0,HH+HV,False")
+    (d / "pass_counts.csv").write_text("\n".join(rows))
+
+
+def test_availability_inside_aoi(client, tmp_path):
+    _aoi_catalog(tmp_path)
+    body = client.post("/availability", json={"bbox": [19.9, 9.9, 20.05, 10.1]}).json()
+    assert body["coverage"] == "catalogue" and [a["area"] for a in body["areas"]] == ["lake"]
+    a = body["areas"][0]
+    assert a["passes"] == 6 and a["newest_pass_date"] == "2026-09-22" and a["quality"] == "PROVISIONAL"
+    assert a["gap_flag"] is True and a["gap_dates"] == ["2026-08-01"] and "2026-08-01" not in a["dates"]
+    assert a["straddles_gap"] is True and a["answerable"] and body["questions"]["water_change"] is True
+
+
+def test_availability_outside_aoi_is_honest(client, tmp_path):
+    _aoi_catalog(tmp_path)
+    body = client.post("/availability", json={"bbox": [-30.0, 0.0, -29.9, 0.1]}).json()
+    assert body["coverage"] == "none" and body["areas"] == [] and body["passes"] == 0
+    assert body["questions"]["water_change"] is False and body["answerable"] == []
+    assert "No NISAR catalogue coverage checked here" in body["message"]
+
+
+def test_availability_straddles_two_aois(client, tmp_path):
+    _aoi_catalog(tmp_path)
+    body = client.post("/availability", json={"bbox": [20.05, 9.95, 20.15, 10.05]}).json()
+    assert {a["area"] for a in body["areas"]} == {"lake", "river"}
+    river = next(a for a in body["areas"] if a["area"] == "river")
+    assert river["status"] == "insufficient_data" and river["answerable"] == []
+    assert body["questions"]["water_change"] is True  # lake can answer, river cannot
+
+
+def test_availability_big_bbox_still_422(client, tmp_path):
+    _aoi_catalog(tmp_path)
+    assert client.post("/availability", json={"bbox": [19.0, 9.0, 21.0, 11.0]}).status_code == 422
+    assert client.post("/analyses", json={**ANALYZE, "bbox": [19.0, 9.0, 21.0, 11.0]}).status_code == 422
+
+
+def test_availability_real_catalog_demo_areas(tmp_path, monkeypatch):
+    monkeypatch.delenv("NISAR_CATALOG_DIR", raising=False)
+    c = TestClient(app)
+    b = c.post("/availability", json={"bbox": [104.0, 12.8, 104.2, 13.0]}).json()
+    assert [a["area"] for a in b["areas"]] == ["mekong_tonlesap"] and b["areas"][0]["passes"] == 11
+    assert c.post("/availability", json={"bbox": [-30, 0, -29.9, 0.1]}).json()["coverage"] == "none"
+
+
+def test_agreement_survives_cache_hit(client, monkeypatch):
+    monkeypatch.setattr(jobs, "run_analysis",
+                        lambda req: {**jobs.sample_result(req["bbox"]), "source": "saved", "_verify": {"opera": {"overlap": 0.7}}})
+    j1 = client.post("/analyses", json={**ANALYZE, "question": "persist"}).json()["job_id"]
+    _wait_done(client, j1)
+    j2 = client.post("/analyses", json={**ANALYZE, "question": "persist"}).json()["job_id"]  # cache hit
+    a = client.get(f"/analyses/{j2}/agreement").json()
+    assert a["available"] is True and a["sources"]["opera"]["overlap"] == 0.7

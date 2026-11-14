@@ -239,3 +239,8 @@ data/
 __pycache__/
 *.pyc
 .pytest_cache/
+
+# Science pipeline data (small catalogs, samples, demo results) is tracked on purpose
+!science/data/
+!science/data/**
+science/data/reference/tonlesap/checkpoints*

@@ -1,0 +1,12 @@
+{
+  "source": "OPERA DSWx",
+  "overlap": 0.72,
+  "precision": 0.895,
+  "recall": 0.787,
+  "compared_fraction": 0.509,
+  "opera_files": [
+    "OPERA_L3_DSWx-HLS_T48PUV_20260721T032519Z_20260728T040905Z_S2B_30_v1.1_B01_WTR.tif",
+    "OPERA_L3_DSWx-S1_T48PVV_20261005T111122Z_20261005T155807Z_S1C_30_v1.0_B01_WTR.tif",
+    "OPERA_L3_DSWx-S1_T48PUV_20261005T111122Z_20261005T155807Z_S1C_30_v1.0_B01_WTR.tif"
+  ]
+}

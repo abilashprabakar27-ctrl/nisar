@@ -36,3 +36,19 @@ def save(key: str, result: dict) -> None:
     tmp = d / f"{key}.json.tmp"
     tmp.write_text(json.dumps(result, indent=2))
     tmp.replace(d / f"{key}.json")
+
+
+def load_verify(key: str) -> dict | None:
+    """Independent-reference comparison (served at /agreement), stored beside the result."""
+    try:
+        return json.loads((cache_dir() / f"{key}.verify.json").read_text())
+    except (OSError, ValueError):
+        return None
+
+
+def save_verify(key: str, verify: dict) -> None:
+    d = cache_dir()
+    d.mkdir(parents=True, exist_ok=True)
+    tmp = d / f"{key}.verify.json.tmp"
+    tmp.write_text(json.dumps(verify, indent=2))
+    tmp.replace(d / f"{key}.verify.json")

@@ -79,10 +79,16 @@ def _onto(tif, win, resampling):
     return dst
 
 
+def _ref_dir(area):
+    """data/reference/<full area> if present, else data/reference/<area suffix> (e.g. tonlesap)."""
+    full = ROOT / "data" / "reference" / area
+    return full if full.is_dir() else ROOT / "data" / "reference" / area.split("_", 1)[-1]
+
+
 def _masks(area, win):
     """(permanent_water, slope_deg) from data/reference/<name>/ if present, else (None, None)."""
     from rasterio.enums import Resampling
-    d = ROOT / "data" / "reference" / area.split("_", 1)[-1]
+    d = _ref_dir(area)
     jrc, dem = d / "jrc_occurrence.tif", d / "dem_copernicus30.tif"
     if not (jrc.exists() and dem.exists()):
         return None, None
@@ -107,7 +113,7 @@ def _opera_grid(patterns, win):
 
 def opera_agreement(labels, win, area, before_date, after_date):
     """Agreement of 'likely_became_water' with OPERA new water (water after, not water before). None if no reference."""
-    d = ROOT / "data" / "reference" / area.split("_", 1)[-1]
+    d = _ref_dir(area)
     s1 = [str(d / f"OPERA_L3_DSWx-S1_*_{after_date.replace('-', '')}T*")]
     hls = sorted(glob.glob(str(d / "OPERA_L3_DSWx-HLS_*")))
     if not glob.glob(s1[0]) or not hls:
