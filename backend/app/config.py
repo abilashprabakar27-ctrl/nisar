@@ -37,6 +37,13 @@ CHANGE_DB = 3.0                 # dB drop/rise that counts as change
 THRESHOLD_MODE = os.getenv("NCE_THRESHOLD_MODE", "fixed")
 WATER_HH_DB = float(os.getenv("NCE_WATER_HH_DB", "-14.5"))
 WATER_HV_DB = float(os.getenv("NCE_WATER_HV_DB", "-20.5"))
+# Accuracy options (see docs/accuracy_log.md for the measured effect of each; hysteresis and after-var stay OFF)
+WATER_BEFORE_MARGIN_DB = float(os.getenv("NCE_WATER_BEFORE_MARGIN_DB", "1.0"))  # before-water must be this much darker than the cut-off
+HYST_HH_EXTRA_DB = float(os.getenv("NCE_HYST_HH_EXTRA_DB", "0"))   # hysteresis: grow seeds into looser HH (dB above cut-off)
+HYST_HV_EXTRA_DB = float(os.getenv("NCE_HYST_HV_EXTRA_DB", "0"))
+HYST_MAX_PX = int(os.getenv("NCE_HYST_MAX_PX", "5"))               # growth limited to this many pixels from a seed
+REQUIRE_PERSISTENT = os.getenv("NCE_REQUIRE_PERSISTENT", "1") == "1"   # new water must be water on every after pass
+AFTER_VAR_MAX_DB = float(os.getenv("NCE_AFTER_VAR_MAX_DB", "0"))       # >0: drop new water whose after passes differ by more (wet fields flicker)
 MIN_PATCH_HA = 1.0
 MAX_AREA_KM2 = float(os.getenv("NCE_MAX_AREA_KM2", "900"))   # about 30 x 30 km
 TARGET_RES_M = float(os.getenv("NCE_TARGET_RES_M", "20"))

@@ -214,6 +214,13 @@ def main():
     ap.add_argument("--water-hh", type=float, default=config.WATER_HH_DB, help="HH water threshold, dB")
     ap.add_argument("--water-hv", type=float, default=config.WATER_HV_DB, help="HV water threshold, dB")
     ap.add_argument("--change-db", type=float, default=config.CHANGE_DB, help="change threshold, dB")
+    ap.add_argument("--before-margin", type=float, default=config.WATER_BEFORE_MARGIN_DB,
+                    help="before-water must be this many dB darker than the cut-off")
+    ap.add_argument("--hyst-hh", type=float, default=config.HYST_HH_EXTRA_DB, help="hysteresis: extra HH dB for growing")
+    ap.add_argument("--hyst-hv", type=float, default=config.HYST_HV_EXTRA_DB, help="hysteresis: extra HV dB for growing")
+    ap.add_argument("--hyst-px", type=int, default=config.HYST_MAX_PX, help="hysteresis: max growth in pixels")
+    ap.add_argument("--persist", action=argparse.BooleanOptionalAction, default=config.REQUIRE_PERSISTENT, help="require water on every after pass")
+    ap.add_argument("--after-var", type=float, default=config.AFTER_VAR_MAX_DB, help="max HH spread between after passes, dB (0=off)")
     ap.add_argument("--min-patch-ha", type=float, default=config.MIN_PATCH_HA)
     ap.add_argument("--threshold-mode", choices=["fixed", "otsu"], default=config.THRESHOLD_MODE)
     ap.add_argument("--lee-size", type=int, default=7)
@@ -228,6 +235,9 @@ def main():
 
     config.WATER_HH_DB, config.WATER_HV_DB, config.CHANGE_DB = args.water_hh, args.water_hv, args.change_db
     config.MIN_PATCH_HA, config.THRESHOLD_MODE = args.min_patch_ha, args.threshold_mode
+    config.WATER_BEFORE_MARGIN_DB, config.HYST_HH_EXTRA_DB = args.before_margin, args.hyst_hh
+    config.HYST_HV_EXTRA_DB, config.HYST_MAX_PX = args.hyst_hv, args.hyst_px
+    config.REQUIRE_PERSISTENT, config.AFTER_VAR_MAX_DB = args.persist, args.after_var
     warnings.filterwarnings("ignore", category=RuntimeWarning)
 
     nb = [args.bbox[0], args.bbox[1] - args.south_shift, args.bbox[2], args.bbox[3] - args.south_shift]

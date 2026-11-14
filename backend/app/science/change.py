@@ -6,6 +6,10 @@ Method (explainable, no trained model):
 3. water threshold from Otsu on the after image (clamped to a physical range)
 4. classes: became water / water receded / permanent water / no change / masked
 5. drop patches smaller than 1 hectare
+
+v4 accuracy rules (docs/accuracy_log.md): a pixel counts as water BEFORE only if clearly dark (cut-off minus
+WATER_BEFORE_MARGIN_DB), so borderline-dark land is not locked in as 'permanent'; new water must be water on
+every after pass.
 """
 from dataclasses import dataclass, field
 
@@ -123,14 +127,20 @@ def detect_water_change(before: list[np.ndarray], after: list[np.ndarray], pixel
     if extra_mask is not None:
         invalid |= extra_mask
 
-    def is_water(hh, hv):
-        w = hh < thr
+    def is_water(hh, hv, margin_hh=0.0, margin_hv=None):
+        """margin > 0 demands darker pixels (stricter); margin < 0 allows brighter ones (looser)."""
+        margin_hv = margin_hh if margin_hv is None else margin_hv
+        w = hh < thr - margin_hh
         if hv is not None:
-            w &= np.where(np.isfinite(hv), hv < thr_hv, True)
+            w &= np.where(np.isfinite(hv), hv < thr_hv - margin_hv, True)
         return w
 
-    water_b = is_water(bc, bhv) & ~invalid
+    water_b = is_water(bc, bhv, config.WATER_BEFORE_MARGIN_DB) & ~invalid
     water_a = is_water(ac, ahv) & ~invalid
+    if config.HYST_HH_EXTRA_DB > 0 or config.HYST_HV_EXTRA_DB > 0:
+        # hysteresis: keep strict water as seeds, add looser-water pixels within a few pixels of a seed
+        loose = is_water(ac, ahv, -config.HYST_HH_EXTRA_DB, -config.HYST_HV_EXTRA_DB) & ~invalid
+        water_a = ndimage.binary_dilation(water_a, iterations=max(config.HYST_MAX_PX, 1), mask=loose) | water_a
 
     # every after pass must agree, so one odd pass (wind, rain, crop growth) cannot create change
     each_after_water = [is_water(a_db[i], ahv_db[i] if use_hv else None) for i in range(len(a_db))]
@@ -139,7 +149,13 @@ def detect_water_change(before: list[np.ndarray], after: list[np.ndarray], pixel
     all_after_dry = np.logical_and.reduce(each_after_dry)
 
     min_px = int(np.ceil(config.MIN_PATCH_HA / pixel_ha))
-    became = remove_small(water_a & ~water_b & (diff < -config.CHANGE_DB), min_px)
+    cand = water_a & ~water_b & (diff < -config.CHANGE_DB)
+    if config.REQUIRE_PERSISTENT:
+        cand &= all_after_water
+    if config.AFTER_VAR_MAX_DB > 0 and len(a_db) > 1:
+        spread = np.nanmax(np.stack(a_db), axis=0) - np.nanmin(np.stack(a_db), axis=0)
+        cand &= ~(spread > config.AFTER_VAR_MAX_DB)
+    became = remove_small(cand, min_px)
     receded = remove_small(water_b & ~water_a & (diff > config.CHANGE_DB) & all_after_dry, 2 * min_px)
     permanent = water_b & water_a
 

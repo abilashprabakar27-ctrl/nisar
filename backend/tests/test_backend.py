@@ -54,6 +54,26 @@ def test_detect_water_change_finds_new_water():
     assert r.persistence > 0.9
 
 
+def test_borderline_before_is_not_permanent_and_one_pass_is_not_change():
+    rng = np.random.default_rng(1)
+    base = 10 ** (-8 / 10) * rng.gamma(4, 0.25, (160, 160))
+    # block A: before only borderline dark (-14 dB HH, -20 dB HV), clearly water after -> new water
+    # block B: dark on only ONE of the two after passes -> not counted
+    def px(hh_db, hv_db):
+        return 10 ** (hh_db / 10), 10 ** (hv_db / 10)
+    b_hh, b_hv = base.copy(), base.copy() * 10 ** (-9 / 10)
+    a1_hh, a1_hv, a2_hh, a2_hv = b_hh.copy(), b_hv.copy(), b_hh.copy(), b_hv.copy()
+    sa, sb = (slice(20, 70), slice(20, 70)), (slice(90, 140), slice(90, 140))
+    b_hh[sa], b_hv[sa] = px(-13.8, -20.0)
+    for hh, hv in ((a1_hh, a1_hv), (a2_hh, a2_hv)):
+        hh[sa], hv[sa] = px(-21, -27)
+    a1_hh[sb], a1_hv[sb] = px(-21, -27)          # only the first after pass is dark here
+    r = change.detect_water_change([b_hh, b_hh * 1.0], [a1_hh, a2_hh], 0.04,
+                                   before_hv=[b_hv, b_hv * 1.0], after_hv=[a1_hv, a2_hv])
+    assert (r.classes[sa] == change.BECAME_WATER).mean() > 0.8
+    assert (r.classes[sb] == change.BECAME_WATER).mean() < 0.05
+
+
 def test_confidence_rules():
     assert change.confidence(2, 2, 1.0, 87, 0.05, ["Provisional"])[0] == "High"
     assert change.confidence(2, 2, 1.0, 40, 0.05, ["Provisional"])[0] == "Lower"
