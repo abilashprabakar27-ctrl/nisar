@@ -183,7 +183,11 @@ def water_area_series(passes_db: list[np.ndarray], threshold_db: float, pixel_ha
 
 def confidence(n_before: int, n_after: int, persistence: float, overlap_pct: float | None,
                masked_fraction: float, qualities: list[str]) -> tuple[str, str]:
-    """Rules from the Night Shift 1 pack."""
+    """Rules from the Night Shift 1 pack.
+
+    overlap_pct must be the STRICT figure (share of our *new* water that OPERA confirms, verify.compare), never
+    one that counts permanent water. Without it (no OPERA check, or no new water) the level cannot be High.
+    """
     reasons = []
     if "Beta" in qualities:
         return "Lower", "Uses Beta-quality NISAR data, which is still being calibrated."
@@ -191,12 +195,14 @@ def confidence(n_before: int, n_after: int, persistence: float, overlap_pct: flo
         return "Lower", f"{masked_fraction:.0%} of the area could not be read (radar shadow, steep slopes or no data)."
     if overlap_pct is not None and overlap_pct < 50:
         return "Lower", f"Only {overlap_pct:.0f}% overlap with NASA's OPERA water map."
-    high = n_before >= 2 and n_after >= 2 and persistence >= 0.8 and (overlap_pct is None or overlap_pct >= 75)
+    high = n_before >= 2 and n_after >= 2 and persistence >= 0.8 and overlap_pct is not None and overlap_pct >= 75
     if high:
         reasons.append("the change shows on both later passes")
         if overlap_pct is not None:
-            reasons.append(f"NASA's OPERA water map agrees ({overlap_pct:.0f}% overlap)")
+            reasons.append(f"NASA's OPERA water map confirms {overlap_pct:.0f}% of the new water")
         return "High", "Why high: " + " and ".join(reasons) + "."
     if persistence < 0.8:
         return "Medium", "Part of the new water appears on only one of the later passes."
-    return "Medium", f"Moderate agreement with NASA's OPERA water map ({overlap_pct:.0f}% overlap)."
+    if overlap_pct is None:
+        return "Medium", "The new water was not checked against NASA's OPERA water map, so this cannot be High."
+    return "Medium", f"Moderate agreement with NASA's OPERA water map ({overlap_pct:.0f}% of our new water confirmed)."

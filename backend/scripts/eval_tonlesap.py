@@ -146,7 +146,7 @@ def score_region(classes, before_o, after_o, sl, grid):
     valid = np.isin(bo, (0, 1, 2)) & np.isin(ao, (0, 1)) & unmasked
     strict = prf(c == change.BECAME_WATER, (ao == 1) & (bo != 1), valid)
     # Lenient = the team's current verify.compare (became + permanent vs all OPERA water, classes 1-3)
-    cmp = verify.compare(c, grid, ao)
+    cmp = verify.compare(c, grid, ao)["all_water"]
     both, ours, theirs = cmp["both_ha"], cmp["nisar_water_ha"], cmp["opera_water_ha"]
     union = ours + theirs - both
     lenient = {"iou": both / union if union else None, "precision": both / ours if ours else None,

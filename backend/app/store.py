@@ -8,7 +8,7 @@ from pathlib import Path
 from . import config
 
 _lock = threading.Lock()
-METHOD_VERSION = "water-change-v3c-calibrated"
+METHOD_VERSION = "water-change-v4-strict-verify"
 
 
 def result_key(req: dict) -> str:
