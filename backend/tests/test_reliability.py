@@ -63,7 +63,7 @@ def test_landcover_shares_and_lower():
     assert lc["checked"] and lc["cropland_share"] == 0.75 and lc["builtup_share"] == 0.25
     # no independent reference backs the new water: the cropland cap applies
     lvl, why = change.confidence(2, 2, 1.0, None, 0.05, ["Provisional"], cropland_share=lc["cropland_share"])
-    assert lvl == "Lower" and "cropland" in why and "OPERA disagreed almost completely" in why
+    assert lvl == "Lower" and "farmland" in why and "disagreed almost completely" in why
     # OPERA also shows water on 87% of the new water: a flooded paddy floodplain is real flooding, no cap
     assert conf(cropland_share=lc["cropland_share"])[0] != "Lower"
     # OPERA weak (<75%) on cropland: cap still applies
@@ -118,8 +118,8 @@ def test_honest_wording():
     from pathlib import Path
     ok = change.confidence(2, 2, 1.0, 87, 0.05, ["Provisional"], new_water_ha=3000.0, place_validated=True)
     assert ok[0] == "High"
-    assert "87% of the area we mark as new water is also water in NASA's OPERA map on the later date" in ok[1]
-    assert "OPERA does not tell us whether that water is new" in ok[1]
+    assert "about 87% of the area we mark as new water is also water in another satellite's water map" in ok[1]
+    assert "does not tell us whether the water is new" in ok[1]
     assert "both later passes" not in ok[1]
     texts = [ok[1], conf(overlap_pct=60)[1], conf(overlap_pct=None)[1], conf(cropland_share=0.9, overlap_pct=60)[1]]
     texts += [x for x in change.validation_status([0, 0, 1, 1])["compared_with_opera"]]
@@ -140,7 +140,7 @@ def test_labels_not_high_are_cautious():
 
 def test_unvalidated_place_capped_at_medium():
     lvl, why = conf(place_validated=False)
-    assert lvl == "Medium" and "not been compared" in why
+    assert lvl == "Medium" and "not checked this place" in why
     assert conf(place_validated=True)[0] == "High"
 
 
@@ -148,4 +148,4 @@ def test_existing_rules_still_win():
     assert conf(qualities=["Beta"], place_validated=False)[0] == "Lower"
     assert conf(overlap_pct=40, place_validated=True)[0] == "Lower"
     lvl, why = conf(new_water_ha=68.0, place_validated=False, unstable_passes=["x"])
-    assert lvl == "Medium" and "too little" in why and "not been compared" in why
+    assert lvl == "Medium" and "too little" in why and "not checked this place" in why
