@@ -32,7 +32,7 @@ def answer(res: dict, q: str) -> dict:
     if re.search(r"agree|opera|other source|nasa|compare|check", t):
         if "overlap_pct" in ag:
             return out(f"NASA's OPERA water map ({ag.get('source', '')[:40]}...) marks {_f(ag.get('opera_water_ha'), ' ha')} "
-                       f"as water; {_f(ag.get('overlap_pct'))}% of our water is confirmed by it. Verdict: {ag.get('verdict')}. "
+                       f"as water; {_f(ag.get('overlap_pct'))}% of our new-water area is also water in OPERA (OPERA does not say whether it is new). Result: {ag.get('verdict')}. "
                        "Differences come from timing, pixel size (30 m vs 20 m) and wavelength (C-band vs L-band).",
                        ["NASA OPERA DSWx-S1"])
         return out("The NASA OPERA comparison was not available for this result, so we can't say yet.")

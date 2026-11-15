@@ -1,4 +1,5 @@
-"""Compare our water map with NASA OPERA DSWx-S1 (independent Sentinel-1 water map).
+"""Compare our water map with NASA OPERA DSWx-S1 (a separate NASA product, Sentinel-1 radar). Agreement is not proof:
+OPERA is another radar-based map and is not asked whether the water is new.
 
 Uses a local GeoTIFF if the reference team saved one (data/drivers/<slug>/opera.tif),
 otherwise searches NASA Earthdata for the DSWx-S1 tile nearest the after date.
@@ -40,7 +41,7 @@ def find_opera(bbox, after_date: str, days: int = 6) -> list[str]:
 
 
 ALL_WATER_NOTE = "includes permanent water, not a test of change"
-MIN_NEW_PX = 25   # fewer new-water pixels than this and there is nothing meaningful to confirm
+MIN_NEW_PX = 25   # fewer new-water pixels than this and there is nothing meaningful to compare
 
 
 def _overlap(ours: np.ndarray, theirs: np.ndarray, ha: float) -> dict:
@@ -52,7 +53,7 @@ def _overlap(ours: np.ndarray, theirs: np.ndarray, ha: float) -> dict:
         "both_ha": round(float(both.sum()) * ha, 1),
         "only_nisar_ha": round(float((ours & ~theirs).sum()) * ha, 1),
         "only_opera_ha": round(float((theirs & ~ours).sum()) * ha, 1),
-        "overlap_pct": round(100.0 * both.sum() / max(ours.sum(), 1), 1),   # share of ours confirmed
+        "overlap_pct": round(100.0 * both.sum() / max(ours.sum(), 1), 1),   # share of our new-water pixels that are also OPERA water (class 1-3) on the after date
         "iou_pct": round(100.0 * both.sum() / max(union, 1), 1),
     }
 
@@ -61,7 +62,7 @@ def compare(classes: np.ndarray, grid: Grid, opera: np.ndarray, ours_water: np.n
             opera_before: np.ndarray | None = None) -> dict:
     """Headline = STRICT: our 'became water' pixels vs OPERA water on the after date.
 
-    Permanent water is never counted, so a big river or lake cannot make the answer look confirmed.
+    Permanent water is never counted, so a big river or lake cannot make the answer look like agreement.
     overlap_pct = share of our new water that OPERA also marks as water (a precision-style check).
     If opera_before (an OPERA water map before the event) is given, iou_pct / recall_pct are computed against
     OPERA *new* water (water after and not open water before), the real test of change.
@@ -88,10 +89,11 @@ def compare(classes: np.ndarray, grid: Grid, opera: np.ndarray, ours_water: np.n
         strict["iou_pct"] = None   # no before reference: an IoU against all OPERA water would be misleading
     n_new = int(new.sum())
     if n_new < MIN_NEW_PX:
-        verdict, strict["overlap_pct"] = "No new water to check", None
+        verdict, verdict_code, strict["overlap_pct"] = "No new water to check", "none", None
     else:
         o = strict["overlap_pct"]
-        verdict = "Confirmed" if o >= 75 else ("Partly confirmed" if o >= 50 else "Sources disagree")
+        verdict_code = "agrees" if o >= 75 else ("partly" if o >= 50 else "disagrees")
+        verdict = {"agrees": "Agrees with OPERA", "partly": "Partly agrees", "disagrees": "Disagrees"}[verdict_code]
     # all-water view (old headline): became + permanent vs all OPERA water
     ours_all = (ours_water if ours_water is not None else np.isin(classes, (BECAME_WATER, PERMANENT))) & valid
     all_water = _overlap(ours_all, theirs, ha)
@@ -100,7 +102,7 @@ def compare(classes: np.ndarray, grid: Grid, opera: np.ndarray, ours_water: np.n
     agree_map[new & theirs] = 1
     agree_map[new & ~theirs] = 2
     agree_map[theirs & ~new & (classes != PERMANENT)] = 3
-    strict.update({"verdict": verdict, "basis": strict_note, "all_water": all_water, "map": agree_map})
+    strict.update({"verdict": verdict, "verdict_code": verdict_code, "basis": strict_note, "all_water": all_water, "map": agree_map})
     return strict
 
 

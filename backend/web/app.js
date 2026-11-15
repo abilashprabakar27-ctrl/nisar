@@ -18,6 +18,20 @@ const corners = '<span class="corners"><i></i><i></i></span>';
 const GAP = ["2026-07-27", "2026-08-10"];
 const NISAR_START = "2026-06-17";
 
+// the API's verdict_code is stable; fall back to the text for results stored before it existed
+function vcode(ag) {
+  if (ag.verdict_code) return ag.verdict_code;
+  return { "Agrees with OPERA": "agrees", "Partly agrees": "partly", "Disagrees": "disagrees" }[ag.verdict] || "";
+}
+// plain-words block: what was checked, where it failed, and that no human-labelled accuracy exists
+function validationHTML(R) {
+  const v = R.validation; if (!v) return "";
+  const fails = (v.known_failures || []).map((f) => `<li>${esc(f)}</li>`).join("");
+  return `<div class="hint small" style="margin-top:8px"><b>What has been checked.</b> ${esc(v.this_place || "")}.
+    Accuracy measured against human-labelled data: <b>${esc(v.human_labelled_accuracy || "not measured")}</b>.
+    ${fails ? `<br><b>Where it failed.</b><ul style="margin:4px 0 0 18px">${fails}</ul>` : ""}</div>`;
+}
+
 function toast(msg, ms = 2600) {
   const t = $("#toast"); t.textContent = msg; t.hidden = false;
   clearTimeout(toast._t); toast._t = setTimeout(() => (t.hidden = true), ms);
@@ -422,7 +436,7 @@ function renderAsk() {
     </div>
     <div class="lbl">LOOKING FOR</div>
     <div class="chips" role="group" aria-label="Looking for">
-      <button class="kchip" aria-checked="true" disabled>Water and floods <em>VALIDATED METHOD</em></button>
+      <button class="kchip" aria-checked="true" disabled>Water and floods <em>COMPARED WITH OPERA ON ONE SITE</em></button>
       <button class="kchip" aria-checked="false" disabled title="Roadmap">Vegetation loss <em>SOON</em></button>
       <button class="kchip" aria-checked="false" disabled title="Roadmap">New buildings <em>SOON</em></button>
       <button class="kchip" aria-checked="false" disabled title="Roadmap">Ground movement <em>SOON</em></button>
@@ -556,7 +570,7 @@ function plainStory(R) {
   if (other.length) items.push([ICON.map, "WHAT ELSE IS ON THE MAP", other.join(" ")]);
   items.push([ICON.radar, "HOW WE SAW IT", `The NISAR satellite flew over ${R.window.before.length + R.window.after.length} times on the same path, before and after. Its radar sees through cloud and at night. Calm water bounces the radar away, so it looks <b>dark</b>. Land that suddenly turns dark and <b>stays dark on the next pass</b> is most likely new water.`]);
   const sure = { High: "We are fairly sure.", Medium: "We are moderately sure.", Lower: "Treat this with caution." }[c.level] || "";
-  const opera = ag.verdict ? ` NASA's separate water map (OPERA, from a different satellite) agrees on <b>${fmt(ag.overlap_pct)}%</b> of the water we found.` : " We could not compare it with NASA's separate water map for these dates.";
+  const opera = ag.verdict ? ` NASA's separate water map (OPERA, from a different satellite) shows water on <b>${fmt(ag.overlap_pct)}%</b> of the area we mark as new water on the later date. It does not tell us whether that water is new.` : " We could not compare it with NASA's separate water map for these dates.";
   items.push([ICON.check, "HOW SURE WE ARE", `<b>${sure}</b> ${esc(c.reason)}${opera}`]);
   const D2 = (R.drivers || []).filter((d) => d.verdict === "Likely" || d.verdict === "Possible");
   items.push([ICON.why, "WHY IT PROBABLY HAPPENED", D2.length
@@ -620,7 +634,8 @@ function renderAnswer() {
       <div style="color:var(--soft);font-size:17px">${h.label === "No clear change" ? "no clear change between the passes" : `${h.label === "Water likely receded" ? "drained away" : "became water"} in ${Math.round((Date.parse(aFirst) - Date.parse(bLast)) / 864e5)} days, ${dshort(bLast)} → ${dshort(aFirst)}`}</div></div>
     <div class="pitch"><svg width="34" height="22" viewBox="0 0 36 24" fill="none" stroke="#E6EDF3" stroke-width="1.4" aria-hidden="true"><rect x="1" y="1" width="34" height="22"/><path d="M18 1v22"/><circle cx="18" cy="12" r="4"/></svg>
       <span>About <b>${fmt(h.football_pitches)} football pitches</b>, or ${h.share_of_area_pct}% of the study area</span></div>
-    <p class="hint">${esc(c.reason)}${ag.overlap_pct !== undefined && ag.overlap_pct !== null ? ` NASA's own water map overlap: ${fmt(ag.overlap_pct)}%.` : ""}</p>
+    <p class="hint">${esc(c.reason)}${ag.overlap_pct !== undefined && ag.overlap_pct !== null ? ` Also water in NASA's OPERA map: ${fmt(ag.overlap_pct)}% of the new-water area.` : ""}</p>
+    ${validationHTML(R)}
     <div class="mi"><div><div class="lbl">MEASURED</div>${esc(R.measured)}</div><div><div class="lbl">WHAT IT LIKELY MEANS</div>${esc(R.interpreted)}</div></div>
     <div class="row" style="margin-top:auto;gap:18px">
       <button class="linkbtn" data-go="why">WHY DID IT CHANGE? ›</button>
@@ -637,7 +652,7 @@ function renderAnswer() {
   <div class="grid3">
     <section class="frame chartframe">${corners}<h3>CHART 1 · CHANGE BY TYPE (HA)</h3>
       ${hb("Became water", A.became_water, maxT, "background:#1D4ED8")}${hb("Water receded", A.water_receded, maxT, "background:#60A5FA")}${hb("River (always)", A.permanent_water, maxT, "background:#334155")}
-      <span class="hint small">Vegetation loss and new buildings are on our roadmap; only water is validated.</span></section>
+      <span class="hint small">Vegetation loss and new buildings are on our roadmap; only water has been checked at all.</span></section>
     <section class="frame chartframe">${corners}<h3>CHART 3 · WATER IN THE AREA (HA)</h3>
       <div class="vbars"><div>${fmt(wb)}<i style="height:${100 * wb / maxW}%;background:#60A5FA"></i></div><div>${fmt(wa)}<i style="height:${100 * wa / maxW}%;background:#1D4ED8"></i></div></div>
       <div class="vbars-x"><span>${dshort(bLast)}</span><span>${dshort(aFirst)}</span></div>
@@ -645,10 +660,10 @@ function renderAnswer() {
     <section class="frame chartframe">${corners}<h3>CHART 4 · FLOODED AREA BY SOURCE (HA)</h3>
       ${hb("NISAR (ours)", ag.nisar_water_ha ?? h.hectares, maxS, "background:#1D4ED8")}${hb("NASA OPERA", ag.opera_water_ha, maxS, "background:#60A5FA")}
       <div class="hbar"><span class="muted">Normal photo</span><span class="track" style="background:repeating-linear-gradient(45deg,#1C2A3D 0 4px,transparent 4px 8px)"></span><b class="muted small">CLOUD</b></div>
-      <span class="hint small">${ag.verdict ? `NASA OPERA confirms ${fmt(ag.overlap_pct)}% of our water.` : "NASA OPERA comparison not available for this date."}</span></section>
+      <span class="hint small">${ag.verdict ? `${fmt(ag.overlap_pct)}% of our new-water area is also water in OPERA.` : "NASA OPERA comparison not available for this date."}</span></section>
   </div>
   <div class="grid2" style="grid-template-columns:minmax(0,1fr) minmax(0,1.1fr)">
-    <section class="frame chartframe">${corners}<h3>DO SOURCES AGREE? ${ag.verdict ? `<span class="chip ${ag.verdict === "Confirmed" ? "green" : ag.verdict === "Partly confirmed" ? "amber" : "red"}" style="margin-left:auto"><span class="dot"></span>${esc(ag.verdict.toUpperCase())} · ${fmt(ag.overlap_pct)}% OVERLAP</span>` : ""}</h3>
+    <section class="frame chartframe">${corners}<h3>DO SOURCES AGREE? ${ag.verdict ? `<span class="chip ${vcode(ag) === "agrees" ? "green" : vcode(ag) === "partly" ? "amber" : "red"}" style="margin-left:auto"><span class="dot"></span>${esc(ag.verdict.toUpperCase())} · ${fmt(ag.overlap_pct)}% OVERLAP</span>` : ""}</h3>
       <div class="strip3">
         <figure><div class="tileimg"><img src="${abs(I.hh)}" alt="NISAR radar after"><img src="${abs(I.result)}" alt="Detected change"></div><figcaption>NISAR RADAR</figcaption></figure>
         <figure><div class="tileimg">${ag.map_url ? `<img src="${abs(ag.map_url)}" alt="Agreement with NASA OPERA">` : '<p class="hint small" style="padding:10px">Not available</p>'}</div><figcaption>NASA OPERA MAP</figcaption></figure>
@@ -814,13 +829,13 @@ function renderSources() {
   setProgress(0); setNav("find");
   const R = S.result; if (!R) return go("find");
   const ag = R.agreement || {}, I = R.images;
-  const ok = ag.verdict === "Confirmed", part = ag.verdict === "Partly confirmed";
+  const ok = vcode(ag) === "agrees", part = vcode(ag) === "partly";
   const max = Math.max(ag.nisar_water_ha || 0, ag.opera_water_ha || 0, 1);
   const bar = (l, v, st) => `<div class="hbar"><span>${l}</span><span class="track"><span style="width:${100 * (v || 0) / max}%;${st}"></span></span><b>${fmt(v)}</b></div>`;
-  ui(`<div class="page">${pageHead("05", "DO SOURCES AGREE?", `${esc(R.area.name.toUpperCase())} · ${dshort(R.window.after[0])} 2026 · INDEPENDENT VIEWS`)}
+  ui(`<div class="page">${pageHead("05", "DO SOURCES AGREE?", `${esc(R.area.name.toUpperCase())} · ${dshort(R.window.after[0])} 2026 · TWO RADAR-BASED MAPS`)}
     ${ag.verdict ? `
     <section class="frame banner verdict ${ok ? "ok" : part ? "no" : "bad"}">${corners}
-      <div><strong style="font:400 22px var(--disp)">${esc(ag.verdict.toUpperCase())}</strong><div class="hint">${ok ? "Two independent radar sources mark the same places as water." : part ? "Most of our water is confirmed; some is seen only by one source." : "The sources see different amounts of water. Read why below."}</div></div>
+      <div><strong style="font:400 22px var(--disp)">${esc(ag.verdict.toUpperCase())}</strong><div class="hint">${ok ? "Two radar-based maps mark the same places as water." : part ? "Most of our new-water area is also water in OPERA; some is seen only by one map." : "The two maps see different amounts of water. Read why below."}</div></div>
       <div class="row" style="margin-left:auto;gap:32px">
         <div class="num"><span class="lbl">OVERLAP</span><b>${fmt(ag.overlap_pct)}%</b></div>
         <div class="num"><span class="lbl">NISAR WATER</span><b>${fmt(ag.nisar_water_ha)} HA</b></div>
@@ -830,7 +845,7 @@ function renderSources() {
       <figure class="frame">${corners}<div class="tileimg"><img src="${abs(I.hh)}" alt="NISAR radar after the change"><img src="${abs(I.result)}" alt="Detected change"><span class="chip cyan mono tag">${fmt(R.headline.hectares)} HA</span></div>
         <figcaption><b><span class="accent">01/</span> NISAR RADAR</b><span class="lbl">${dshort(R.window.after[0])} 2026 · L-BAND · OUR RESULT</span>Sees through cloud and at night.</figcaption></figure>
       <figure class="frame">${corners}<div class="tileimg">${ag.map_url ? `<img src="${abs(ag.map_url)}" alt="Agreement map: blue both, light blue only NISAR, amber only OPERA">` : ""}<span class="chip mono tag">${ag.opera_water_ha ? fmt(ag.opera_water_ha) + " HA" : "–"}</span></div>
-        <figcaption><b><span class="accent">02/</span> AGREEMENT WITH NASA OPERA</b><span class="lbl">SENTINEL-1 · INDEPENDENT NASA PRODUCT</span>
+        <figcaption><b><span class="accent">02/</span> AGREEMENT WITH NASA OPERA</b><span class="lbl">SENTINEL-1 · SEPARATE NASA PRODUCT</span>
           <span class="row small"><span><i style="display:inline-block;width:12px;height:10px;background:#1D4ED8"></i> both</span><span><i style="display:inline-block;width:12px;height:10px;background:#93C5FD"></i> only NISAR</span><span><i style="display:inline-block;width:12px;height:10px;background:#F59E0B"></i> only OPERA</span></span></figcaption></figure>
       <figure class="frame">${corners}<div class="tileimg"><img src="${esc(I.photo)}" alt="Normal satellite photo from NASA Worldview, likely cloudy" onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'hint',style:'padding:20px',textContent:'Photo not reachable right now.'}))"><span class="chip mono tag">PHOTO</span></div>
         <figcaption><b><span class="accent">03/</span> NORMAL PHOTO</b><span class="lbl">NASA WORLDVIEW · ${dshort(R.window.after[0])}</span>Context only: cloud usually hides floods.</figcaption></figure>
@@ -856,7 +871,7 @@ function renderEvidence() {
     ${R ? `<div class="grid3">
       ${stat("PRECISION", acc ? acc.precision_pct + "%" : "–", acc ? `When we say "water", we are right ${acc.precision_pct} times in 100.` : "Not scored yet: needs hand-checked points.")}
       ${stat("RECALL", acc ? acc.recall_pct + "%" : "–", acc ? `We find ${acc.recall_pct} of every 100 truly flooded places.` : "Not scored yet.")}
-      ${stat("OVERLAP WITH NASA OPERA", ag.overlap_pct !== undefined ? fmt(ag.overlap_pct) + "%" : "–", "Share of our water that NASA's own map confirms.")}
+      ${stat("OVERLAP WITH NASA OPERA", ag.overlap_pct !== undefined ? fmt(ag.overlap_pct) + "%" : "–", "Share of our new-water area that is also water in OPERA on the later date. It does not tell us the water is new.")}
     </div>` : ""}
     <div class="grid2">
       <section class="frame" style="padding:18px;display:flex;flex-direction:column;gap:12px">${corners}<h3>CHECK OF HAND-LABELLED POINTS</h3>
@@ -978,10 +993,11 @@ function printReport() {
     <p>${dshort(R.window.before.at(-1))} → ${dshort(R.window.after[0])} 2026 · NISAR track ${esc(R.track.track)} ${esc(R.track.direction)} · ${esc([...new Set(R.passes.filter((p) => p.used).map((p) => p.quality))].join("/"))} data${R.source === "sample" ? " · SAMPLE DATA" : ""}</p>
     <h2 style="font-size:22pt;margin:6pt 0">${esc(R.headline.label)}: ${fmt(R.headline.hectares)} ha <span style="font-size:12pt;color:#555">(about ${fmt(R.headline.football_pitches)} football pitches)</span></h2>
     <p><b>Confidence: ${esc(R.confidence.level)}.</b> ${esc(R.confidence.reason)}</p>
+    ${validationHTML(R)}
     <div style="position:relative"><img src="${abs(R.images.hh)}" alt="NISAR HH radar after the change"><img src="${abs(R.images.result)}" alt="Detected change" style="position:absolute;inset:0"></div>
     <table><tr><th>Measured</th><td>${esc(R.measured)}</td></tr><tr><th>What it likely means</th><td>${esc(R.interpreted)}</td></tr>
       <tr><th>Became water / receded / permanent</th><td>${fmt(R.areas_ha.became_water)} / ${fmt(R.areas_ha.water_receded)} / ${fmt(R.areas_ha.permanent_water)} ha</td></tr>
-      <tr><th>NASA OPERA check</th><td>${ag.verdict ? `${esc(ag.verdict)} · ${fmt(ag.overlap_pct)}% of our water confirmed` : "not available"}</td></tr>
+      <tr><th>NASA OPERA check</th><td>${ag.verdict ? `${esc(ag.verdict)} · ${fmt(ag.overlap_pct)}% of our new-water area is also water in OPERA` : "not available"}</td></tr>
       <tr><th>Likely causes (interpretation)</th><td>${(R.drivers || []).filter((d) => d.verdict !== "Not checked").map((d) => `${esc(d.name)}: ${esc(d.verdict)}`).join("; ")}</td></tr></table>
     <h3 style="margin:10pt 0 4pt">What happened here, in plain words</h3>
     <p><b>${esc(plainStory(R).lead)}</b></p>

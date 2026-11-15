@@ -63,8 +63,8 @@ def test_landcover_shares_and_lower():
     assert lc["checked"] and lc["cropland_share"] == 0.75 and lc["builtup_share"] == 0.25
     # no independent reference backs the new water: the cropland cap applies
     lvl, why = change.confidence(2, 2, 1.0, None, 0.05, ["Provisional"], cropland_share=lc["cropland_share"])
-    assert lvl == "Lower" and "cropland" in why and "failed validation" in why
-    # OPERA confirms 87% of the new water: a flooded paddy floodplain is real flooding, no cap
+    assert lvl == "Lower" and "cropland" in why and "OPERA disagreed almost completely" in why
+    # OPERA also shows water on 87% of the new water: a flooded paddy floodplain is real flooding, no cap
     assert conf(cropland_share=lc["cropland_share"])[0] != "Lower"
     # OPERA weak (<75%) on cropland: cap still applies
     assert change.confidence(2, 2, 1.0, 60, 0.05, ["Provisional"], cropland_share=0.9)[0] == "Lower"
@@ -92,19 +92,55 @@ def test_worldcover_tile_names_and_failsoft(monkeypatch):
 
 
 # ---- C. validation status
+DATES_IN = ["2026-08-30", "2026-09-11", "2026-09-23", "2026-10-05"]
+
+
 def test_validation_block():
-    v = change.validation_status([80.25, 26.35, 80.5, 26.6])
-    assert v["this_place"] == "not validated" and v["human_labelled_accuracy"] == "not measured"
-    assert any("IoU 0.68" in x and "precision 0.88" in x and "recall 0.74" in x for x in v["validated_against_opera"])
+    v = change.validation_status([80.25, 26.35, 80.5, 26.6], DATES_IN, "083")
+    assert v["this_place"] == "not compared here" and v["human_labelled_accuracy"] == "not measured"
+    txt = " ".join(v["compared_with_opera"])
+    assert "IoU 0.68 [0.64-0.72]" in txt and "precision 0.88" in txt and "recall 0.75" in txt and "not validated" in txt
+    assert "validated_against_opera" not in v
     assert any("0.04" in x for x in v["known_failures"]) and any("2 of 2" in x for x in v["known_failures"])
-    inside = change.validation_status([103.95, 13.10, 104.05, 13.20])
-    assert inside["this_place"] == "validated against OPERA on one window and season"
-    assert change.validation_status([103.9, 12.83, 104.12, 13.05])["this_place"] == "not validated"   # south neighbour
+    box = [103.95, 13.10, 104.05, 13.20]
+    inside = change.validation_status(box, DATES_IN, "083")
+    assert inside["this_place"] == "compared with OPERA here for Jul to Oct 2026, track 83; other dates are not checked"
+    assert inside["this_place_validated"] is True and change.validation_status(box, DATES_IN, 83)["this_place_validated"]
+    assert change.validation_status([103.9, 12.83, 104.12, 13.05], DATES_IN, "083")["this_place"] == "not compared here"   # south neighbour
+    # right box, wrong dates or wrong track or no dates: not compared here
+    assert not change.validation_status(box, ["2027-02-01", "2027-02-13"], "083")["this_place_validated"]
+    assert not change.validation_status(box, DATES_IN, "098")["this_place_validated"]
+    assert not change.validation_status(box)["this_place_validated"]
+
+
+def test_honest_wording():
+    import re
+    from pathlib import Path
+    ok = change.confidence(2, 2, 1.0, 87, 0.05, ["Provisional"], new_water_ha=3000.0, place_validated=True)
+    assert ok[0] == "High"
+    assert "87% of the area we mark as new water is also water in NASA's OPERA map on the later date" in ok[1]
+    assert "OPERA does not tell us whether that water is new" in ok[1]
+    assert "both later passes" not in ok[1]
+    texts = [ok[1], conf(overlap_pct=60)[1], conf(overlap_pct=None)[1], conf(cropland_share=0.9, overlap_pct=60)[1]]
+    texts += [x for x in change.validation_status([0, 0, 1, 1])["compared_with_opera"]]
+    for t in texts:
+        assert not re.search(r"confirm|independent|VALIDATED METHOD", t, re.I), t
+    from app.science import verify
+    assert not re.search(r"confirm|independent", Path(verify.__file__).read_text().split('"""', 2)[1], re.I)
+    ui = (Path(__file__).resolve().parents[1] / "web" / "app.js").read_text()
+    assert "VALIDATED METHOD" not in ui and "Confirmed" not in ui and "confirms" not in ui and "INDEPENDENT" not in ui
+
+
+def test_labels_not_high_are_cautious():
+    from app import pipeline
+    src = open(pipeline.__file__).read()
+    assert "Possible new water" in src and "Radar suggests new water; this has not been checked here." in src
+    assert "numbers may change when reprocessed" in src and "shift slightly" not in src
 
 
 def test_unvalidated_place_capped_at_medium():
     lvl, why = conf(place_validated=False)
-    assert lvl == "Medium" and "not been validated" in why
+    assert lvl == "Medium" and "not been compared" in why
     assert conf(place_validated=True)[0] == "High"
 
 
@@ -112,4 +148,4 @@ def test_existing_rules_still_win():
     assert conf(qualities=["Beta"], place_validated=False)[0] == "Lower"
     assert conf(overlap_pct=40, place_validated=True)[0] == "Lower"
     lvl, why = conf(new_water_ha=68.0, place_validated=False, unstable_passes=["x"])
-    assert lvl == "Medium" and "too little" in why and "not been validated" in why
+    assert lvl == "Medium" and "too little" in why and "not been compared" in why

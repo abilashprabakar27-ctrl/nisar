@@ -45,7 +45,7 @@ RESOURCES = [
      "non_us": True, "tags": ["partner"]},
     # Supporting data used by the backend
     {"id": "opera", "title": "NASA OPERA DSWx-S1 surface water", "url": "https://www.earthdata.nasa.gov/data/projects/opera",
-     "kind": "data", "used_for": "independent water map", "tags": ["verify"]},
+     "kind": "data", "used_for": "separate NASA water map (Sentinel-1 radar)", "tags": ["verify"]},
     {"id": "power", "title": "NASA POWER daily precipitation", "url": "https://power.larc.nasa.gov/",
      "kind": "data", "used_for": "rain evidence for Why", "tags": ["drivers"]},
     {"id": "firms", "title": "NASA FIRMS fire hotspots", "url": "https://firms.modaps.eosdis.nasa.gov/",

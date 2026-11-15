@@ -78,7 +78,7 @@ def test_confidence_rules():
     assert change.confidence(2, 2, 1.0, 87, 0.05, ["Provisional"])[0] == "High"
     assert change.confidence(2, 2, 1.0, 40, 0.05, ["Provisional"])[0] == "Lower"
     assert change.confidence(2, 2, 1.0, 87, 0.05, ["Beta"])[0] == "Lower"
-    # no strict OPERA confirmation of the new water -> never High
+    # no OPERA comparison of the new water -> never High
     assert change.confidence(2, 2, 1.0, None, 0.05, ["Provisional"])[0] == "Medium"
 
 
@@ -93,11 +93,11 @@ def test_verify_strict_ignores_permanent_water():
     opera[:, :50] = 1                             # OPERA agrees on the permanent water, not on the new water
     grid = Grid(32648, np.arange(100) * 20.0, np.arange(100)[::-1] * 20.0, 20.0)
     cmp = verify.compare(classes, grid, opera)
-    assert cmp["overlap_pct"] == 0.0 and cmp["verdict"] == "Sources disagree"
+    assert cmp["overlap_pct"] == 0.0 and cmp["verdict"] == "Disagrees" and cmp["verdict_code"] == "disagrees"
     assert cmp["all_water"]["overlap_pct"] > 90 and "permanent" in cmp["all_water"]["note"]
     assert change.confidence(2, 2, 1.0, cmp["overlap_pct"], 0.05, ["Provisional"])[0] != "High"
     opera[10:20, 60:70] = 1
-    assert verify.compare(classes, grid, opera)["verdict"] == "Confirmed"
+    assert verify.compare(classes, grid, opera)["verdict_code"] == "agrees"
     none = verify.compare(np.zeros(shape, "uint8"), grid, opera)
     assert none["overlap_pct"] is None and none["verdict"] == "No new water to check"
 
@@ -105,7 +105,7 @@ def test_verify_strict_ignores_permanent_water():
 def test_sample_endpoint_and_files():
     c = TestClient(app)
     r = c.get("/sample").json()
-    assert r["source"] == "sample" and r["headline"]["label"] == "Likely flooding"
+    assert r["source"] == "sample" and r["headline"]["label"] == "Possible new water"   # sample is offline, level is not High
     assert r["confidence"]["level"] in ("High", "Medium", "Lower")
     for k in ("result", "hh", "hv", "mix"):
         path = r["images"][k].split("/files/")[1]

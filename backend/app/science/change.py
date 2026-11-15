@@ -1,9 +1,9 @@
-"""Water-change detection on NISAR HH backscatter.
+"""Water-change detection on NISAR HH (and HV) backscatter.
 
 Method (explainable, no trained model):
 1. linear power -> decibels; Lee speckle filter
 2. median composite of the before passes and of the after passes
-3. water threshold from Otsu on the after image (clamped to a physical range)
+3. water = fixed HH + HV cut-offs (config.py; Otsu on the after image is an optional mode, not the default)
 4. classes: became water / water receded / permanent water / no change / masked
 5. drop patches smaller than 1 hectare
 
@@ -203,11 +203,14 @@ PASS_DRIFT_DB = 1.5          # a pass this far from the median of all passes is 
 CROPLAND_SHARE_MAX = 0.50    # more new water than this on cropland -> not above Lower (cropland plains south of Tonle Sap, IoU 0.04)
 WC_CROPLAND, WC_BUILT = 40, 50
 
-# Tonle Sap lake window: the only place scored against OPERA (strict became-water score), see docs/accuracy_log.md
-TONLE_SAP_VALIDATED_BBOX = (103.90, 13.05, 104.12, 13.27)
-VALIDATED_AGAINST_OPERA = [
-    "Tonle Sap lake window (103.90-104.12 E, 13.05-13.27 N), one season and one NISAR track: IoU 0.68, precision 0.88, "
-    "recall 0.74 against OPERA new water, compared on 51% of the window (docs/accuracy_log.md). OPERA is a second opinion, not ground truth.",
+# Tonle Sap lake window: the only place compared with OPERA (became-water score), see docs/accuracy_log.md
+TONLE_SAP_VALIDATED_BBOX = (103.90, 13.05, 104.12, 13.27)   # name kept for imports; it is a "compared here" box, not a validation
+COMPARED_PERIOD = ("2026-07-01", "2026-10-31")
+COMPARED_TRACK = 83
+COMPARED_WITH_OPERA = [
+    "Tonle Sap lake window (103.90-104.12 E, 13.05-13.27 N), Jul to Oct 2026, NISAR track 83: the settings were chosen on this "
+    "window. Score on the half not used for sweeps: IoU 0.68 [0.64-0.72], precision 0.88, recall 0.75, compared with OPERA "
+    "new water (docs/accuracy_log.md). This is a comparison with another radar-based map, not validated, and OPERA is not ground truth.",
 ]
 KNOWN_FAILURES = [
     "cropland plains: IoU 0.04 on one window south of Tonle Sap, 301k px predicted as new water vs 15k in OPERA (docs/GENERALISATION.md)",
@@ -215,16 +218,27 @@ KNOWN_FAILURES = [
 ]
 
 
-def validation_status(bbox) -> dict:
-    """What has really been measured about this method, and whether this place is covered. Only measured numbers, with sources."""
+def _track_num(track) -> int | None:
+    try:
+        return int(str(track).strip().lstrip("0") or 0)
+    except ValueError:
+        return None
+
+
+def validation_status(bbox, dates: list[str] | None = None, track=None) -> dict:
+    """What has really been compared with OPERA, and whether this request is covered. Only measured numbers, with sources.
+    'Compared here' needs the bbox inside the window AND all before/after dates inside the compared period AND track 083."""
     w, s, e, n = bbox
     bw, bs, be, bn = TONLE_SAP_VALIDATED_BBOX
     inside = w >= bw - 1e-6 and s >= bs - 1e-6 and e <= be + 1e-6 and n <= bn + 1e-6
+    in_period = bool(dates) and all(COMPARED_PERIOD[0] <= str(d)[:10] <= COMPARED_PERIOD[1] for d in dates)
+    ok = inside and in_period and _track_num(track) == COMPARED_TRACK
     return {
-        "validated_against_opera": list(VALIDATED_AGAINST_OPERA),
+        "compared_with_opera": list(COMPARED_WITH_OPERA),
         "known_failures": list(KNOWN_FAILURES),
-        "this_place": "validated against OPERA on one window and season" if inside else "not validated",
-        "this_place_validated": inside,
+        "this_place": ("compared with OPERA here for Jul to Oct 2026, track 83; other dates are not checked" if ok
+                       else "not compared here"),
+        "this_place_validated": ok,
         "human_labelled_accuracy": "not measured",
     }
 
@@ -276,10 +290,10 @@ def confidence(n_before: int, n_after: int, persistence: float, overlap_pct: flo
                place_validated: bool | None = None) -> tuple[str, str]:
     """Rules from the Night Shift 1 pack plus three reliability checks (docs/accuracy_log.md "Reliability checks").
 
-    overlap_pct must be the STRICT figure (share of our *new* water that OPERA confirms, verify.compare), never
-    one that counts permanent water. Without it (no OPERA check, or no new water) the level cannot be High.
+    overlap_pct is verify.compare's headline: the share of our new-water pixels that are any OPERA water class 1-3 on
+    the AFTER date (it does not test that the water is new; no OPERA before map is used), never one that counts permanent water. Without it (no OPERA check, or no new water) the level cannot be High.
     Reliability inputs (None = not checked, rule skipped): unstable_passes (dates whose land brightness differs from
-    the others), cropland_share (share of new water on cropland), place_validated (bbox inside a validated window).
+    the others), cropland_share (share of new water on cropland), place_validated (bbox, dates and track match the one window compared with OPERA).
     """
     reasons = []
     if "Beta" in qualities:
@@ -288,12 +302,12 @@ def confidence(n_before: int, n_after: int, persistence: float, overlap_pct: flo
         return "Lower", f"{masked_fraction:.0%} of the area could not be read (radar shadow, steep slopes or no data)."
     if overlap_pct is not None and overlap_pct < 50:
         return "Lower", f"Only {overlap_pct:.0f}% overlap with NASA's OPERA water map."
-    # the cropland cap stands in for a missing check: where OPERA confirms the new water (>= 75%), a flooded floodplain
-    # of paddies is real flooding, so the cap applies only when no independent reference backs the new water
+    # the cropland cap stands in for a missing check: where OPERA also shows water over >= 75% of the new water, a flooded
+    # floodplain of paddies is likely real flooding, so the cap applies only when no other water map agrees
     if (cropland_share is not None and cropland_share > CROPLAND_SHARE_MAX
             and (overlap_pct is None or overlap_pct < 75)):
         return "Lower", ("Most detected new water lies on cropland, where radar cannot separate a flood from irrigated or "
-                         f"flooded paddies; this kind of place failed validation ({cropland_share:.0%} of the new water is on cropland).")
+                         f"flooded paddies; on one cropland window our map and OPERA disagreed almost completely ({cropland_share:.0%} of the new water is on cropland).")
     high = n_before >= 2 and n_after >= 2 and persistence >= 0.8 and overlap_pct is not None and overlap_pct >= 75
     if high:
         caps = []
@@ -304,15 +318,17 @@ def confidence(n_before: int, n_after: int, persistence: float, overlap_pct: flo
             caps.append("Pass " + ", ".join(unstable_passes) + " differs by more than "
                         f"{PASS_DRIFT_DB:g} dB from the others (wind, rain or wet soil), so open water may be missed on that date.")
         if place_validated is False:
-            caps.append("This place has not been validated: the method has been scored against OPERA only on one lake window, "
-                        "and failed on other kinds of place.")
+            caps.append("This place has not been compared with OPERA: the method was compared only on one lake window, "
+                        "and it disagreed with OPERA on other kinds of place.")
         if caps:
             return "Medium", " ".join(caps)
-        reasons.append("the change shows on both later passes")
-        reasons.append(f"NASA's OPERA water map confirms {overlap_pct:.0f}% of the new water")
+        # persistence is 1.0 by construction when config.REQUIRE_PERSISTENT is on, so it is not offered as evidence
+        reasons.append(f"{overlap_pct:.0f}% of the area we mark as new water is also water in NASA's OPERA map on the later "
+                       "date. OPERA does not tell us whether that water is new")
         return "High", "Why high: " + " and ".join(reasons) + "."
-    if persistence < 0.8:
+    if persistence < 0.8:   # only reachable when persistence is not required (callers/tests); the app keeps only water seen on every later pass
         return "Medium", "Part of the new water appears on only one of the later passes."
     if overlap_pct is None:
-        return "Medium", "The new water was not checked against NASA's OPERA water map, so this cannot be High."
-    return "Medium", f"Moderate agreement with NASA's OPERA water map ({overlap_pct:.0f}% of our new water confirmed)."
+        return "Medium", "The new water was not compared with NASA's OPERA water map, so this cannot be High."
+    return "Medium", (f"{overlap_pct:.0f}% of the area we mark as new water is also water in NASA's OPERA map on the later "
+                      "date. OPERA does not tell us whether that water is new.")

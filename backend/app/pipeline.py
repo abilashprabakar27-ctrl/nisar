@@ -198,7 +198,7 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
     stab = change.radiometric_stability(all_dates, db_all, r.classes, r.threshold_db)
     wc = data_sources.worldcover_on_grid(bbox, grid) if online else None
     lc = change.landcover_shares(r.classes, wc)
-    validation = change.validation_status(bbox)
+    validation = change.validation_status(bbox, [p.date for p in before + after], trk)
     unstable = [f["date"] for f in stab.get("flagged", [])]
     level, reason = change.confidence(len(before), len(after), r.persistence, overlap, r.masked_fraction, qualities,
                                        new_water_ha=r.areas_ha.get("became_water"),
@@ -211,11 +211,12 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
 
     became, receded = r.areas_ha["became_water"], r.areas_ha["water_receded"]
     if became >= 5 and became >= 0.3 * receded:
-        label, hect = "Likely flooding", became
+        label, hect = ("Likely flooding" if level == "High" else "Possible new water"), became
         measured = (f"Radar brightness dropped sharply over {became:,.0f} ha between "
                     f"{before[-1].date} and {after[0].date}" +
                     (" and stayed low on the next pass." if r.persistence >= 0.8 else "."))
-        interpreted = "New water, most likely flooding. A drop like this can also come from very wet soil."
+        interpreted = ("New water, most likely flooding. A drop like this can also come from very wet soil." if level == "High"
+                       else "Radar suggests new water; this has not been checked here.")
     elif receded >= 5:
         label, hect = "Water likely receded", receded
         measured = f"Radar brightness rose over {receded:,.0f} ha that was dark (water) before."
@@ -224,7 +225,7 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
         label, hect = "No clear change", 0.0
         measured = "No area larger than 1 hectare changed beyond the 3 dB threshold."
         interpreted = "The surface looks about the same in both groups of passes."
-        if level == "High":   # "the change shows on both later passes" makes no sense when nothing changed
+        if level == "High":   # a High reason about new water makes no sense when nothing changed
             level, reason = "Medium", ("Why medium: no change larger than 1 hectare was found with "
                                        f"{len(before)} passes before and {len(after)} after. Small or short-lived "
                                        "changes can still be missed.")
@@ -236,7 +237,7 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
               "Areas in radar shadow or on steep slopes are masked out."]
     if any(q != "Validated" for q in qualities):
         limits.append("Some NISAR data used is " + "/".join(q for q in qualities if q != "Validated") +
-                      " quality; numbers may shift slightly when reprocessed.")
+                      " quality; numbers may change when reprocessed.")
     limits += change.stability_limits(stab)
     if not stab.get("checked"):
         limits.append(f"Pass-to-pass brightness was not checked ({stab.get('note')}).")
@@ -244,9 +245,9 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
         limits.append("Land cover (ESA WorldCover) was not checked, so we cannot say whether new water lies on cropland.")
     elif lc.get("cropland_share") is not None and lc["cropland_share"] > change.CROPLAND_SHARE_MAX:
         limits.append("Most detected new water lies on cropland, where radar cannot separate a flood from irrigated or "
-                      "flooded paddies; this kind of place failed validation.")
-    if validation["this_place"] == "not validated":
-        limits.append("This place has not been validated: the method was scored against OPERA on one lake window only.")
+                      "flooded paddies; on one cropland window our map and OPERA disagreed almost completely.")
+    if not validation["this_place_validated"]:
+        limits.append("This place and these dates have not been compared with OPERA: the method was compared on one lake window (Jul to Oct 2026, track 83) only.")
     if before[-1].date <= config.DATA_GAP[1] and after[0].date >= config.DATA_GAP[0]:
         limits.append("No NISAR images exist 27 Jul - 10 Aug 2026; nothing is filled in.")
 
