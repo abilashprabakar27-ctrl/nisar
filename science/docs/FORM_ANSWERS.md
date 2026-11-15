@@ -44,7 +44,6 @@ It already runs on real data, so feasibility is shown, not assumed.
 
 ## Future implementation plan
 
-Full list with reasons, data, effort and risk: docs/ROADMAP.md.
 
 **Next:**
 1. A human checks a set of labelled points on clear Sentinel-2 images. This gives an accuracy number that does not depend on OPERA. The points are never used to set thresholds.

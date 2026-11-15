@@ -95,4 +95,4 @@ What we do not know, and say so:
 
 ## Files to know
 
-`docs/ACCURACY_FINAL.md` the results page, `docs/accuracy_log.md` every experiment including failures, `docs/GENERALISATION.md` why it fails on some windows, `docs/ROADMAP.md` what is left, `backend/app/science/change.py` the detection and confidence rules, `backend/app/store.py` the method version.
+`docs/ACCURACY_FINAL.md` the results page, `docs/accuracy_log.md` every experiment including failures, `docs/GENERALISATION.md` why it fails on some windows, `backend/app/science/change.py` the detection and confidence rules, `backend/app/store.py` the method version.

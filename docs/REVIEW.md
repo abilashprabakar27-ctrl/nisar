@@ -3,7 +3,7 @@
 Written 2026-11-15 on branch sanjay/accuracy. Reviewer brief: find leakage, circularity, selection bias, over-claiming and statistical weakness.
 Nothing but this file was changed. Method reviewed: `water-change-v5-reliability-checks` (detection pixels = v4b).
 
-Files read: docs/accuracy_log.md, GENERALISATION.md, SEN1FLOODS11_RESULTS.md, STORIES_RESULTS.md, DATASETS.md, ACCURACY_PLAN_V2.md, the untracked drafts docs/ACCURACY_FINAL.md and the modified science/docs/ABSTRACT.md as they stood at review time, science/docs/FORM_ANSWERS.md, backend/scripts/eval_tonlesap.py, eval_s2.py, diagnose_generalisation.py, backend/app/science/change.py, verify.py, backend/app/pipeline.py, config.py, backend/web/app.js, backend/app/assistant.py.
+Files read: docs/accuracy_log.md, GENERALISATION.md, SEN1FLOODS11_RESULTS.md, STORIES_RESULTS.md, DATASETS.md, the untracked drafts docs/ACCURACY_FINAL.md and the modified science/docs/ABSTRACT.md as they stood at review time, science/docs/FORM_ANSWERS.md, backend/scripts/eval_tonlesap.py, eval_s2.py, diagnose_generalisation.py, backend/app/science/change.py, verify.py, backend/app/pipeline.py, config.py, backend/web/app.js, backend/app/assistant.py.
 
 Light checks I ran (read-only, a few seconds each, on the saved `backend/data/diag_cache/*.npz`, `backend/data/final.json`, `team_data/s2_reference/eval_s2_last.json`): I re-ran the frozen v4b call on the cached arrays and reproduced the published strict scores (main 0.678/0.884/0.745, neighbour 0.548/0.579/0.912, fresh 0.045/0.045/0.905, fresh_e 0.782/0.864/0.891), then cross-tabulated OPERA codes, and block-bootstrapped (2 km blocks, 2000 resamples). Numbers marked **[check]** below come from those runs; they are not in any committed file and should be re-derived by the team before being quoted.
 
@@ -124,7 +124,7 @@ A side effect worth knowing: the guard decision itself rested on noise. Margins 
 | GENERALISATION.md:48-73, 144 | "generalises? YES", "Wins" | Inside noise; one rule found on the test window | "passed the pre-set rule; not distinguishable from noise" |
 | SEN1FLOODS11_RESULTS.md:110 | "Better than Otsu, always." | Bolivia: event Otsu VV 0.594 vs fixed 0.508, same paragraph | "Better than Otsu on the ten tuning events; not on Bolivia" |
 | SEN1FLOODS11_RESULTS.md:109 | "Unseen place: calibration helped in VV" | One event, 15 chips, about 14 variants compared, one calibrated variant failed badly | "On one unseen event two of three calibrated variants scored higher; intervals overlap; not evidence" |
-| science/docs/FORM_ANSWERS.md:30, 39; science/README.md:13; docs/TEAM_ARCHITECTURE_VS_SCIENCE.md:19 | 0.72 / 0.90 / 0.79, "10,500 ha ... Medium confidence" | Old pipeline, threshold tuned against OPERA on that site; not the app's numbers | Replace with the paragraph in 6. ACCURACY_PLAN_V2.md:36 already lists this as undone. |
+| science/docs/FORM_ANSWERS.md:30, 39; science/README.md:13; docs/TEAM_ARCHITECTURE_VS_SCIENCE.md:19 | 0.72 / 0.90 / 0.79, "10,500 ha ... Medium confidence" | Old pipeline, threshold tuned against OPERA on that site; not the app's numbers | Replace with the paragraph in 6. |
 | ABSTRACT | "checks itself against NASA's own water maps" | Reads as verification | "compares its map with a separate NASA water map where one exists" |
 
 ### 4.2 App texts and the confidence / validation logic
