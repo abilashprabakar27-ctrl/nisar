@@ -297,38 +297,38 @@ def confidence(n_before: int, n_after: int, persistence: float, overlap_pct: flo
     """
     reasons = []
     if "Beta" in qualities:
-        return "Lower", "Uses Beta-quality NISAR data, which is still being calibrated."
+        return "Lower", "Some of the satellite images are early versions, so treat this with care."
     if masked_fraction > 0.15:
-        return "Lower", f"{masked_fraction:.0%} of the area could not be read (radar shadow, steep slopes or no data)."
+        return "Lower", "Part of the area couldn't be seen clearly."
     if overlap_pct is not None and overlap_pct < 50:
-        return "Lower", f"Only {overlap_pct:.0f}% overlap with NASA's OPERA water map."
+        return "Lower", f"Only about {overlap_pct:.0f}% of the area we mark as new water is also water in another satellite's water map (NASA OPERA), so treat it with care."
     # the cropland cap stands in for a missing check: where OPERA also shows water over >= 75% of the new water, a flooded
     # floodplain of paddies is likely real flooding, so the cap applies only when no other water map agrees
     if (cropland_share is not None and cropland_share > CROPLAND_SHARE_MAX
             and (overlap_pct is None or overlap_pct < 75)):
-        return "Lower", ("Most detected new water lies on cropland, where radar cannot separate a flood from irrigated or "
-                         f"flooded paddies; on one cropland window our map and OPERA disagreed almost completely ({cropland_share:.0%} of the new water is on cropland).")
+        return "Lower", (f"Most of the new water ({cropland_share:.0%}) is on farmland. Radar can't tell a flood from "
+                         "flooded rice fields, and on one farmland test our map and the other satellite's map disagreed almost completely.")
     high = n_before >= 2 and n_after >= 2 and persistence >= 0.8 and overlap_pct is not None and overlap_pct >= 75
     if high:
         caps = []
         if new_water_ha is not None and new_water_ha < config.MIN_HIGH_CONF_HA:
-            caps.append(f"Only {new_water_ha:.0f} ha of new water was found, too little to call High: agreement with "
-                        f"OPERA on a small area says what we found is probably right, not that the whole change was mapped.")
+            caps.append(f"Only {new_water_ha:.0f} ha of new water was found, which is too little to call High. Agreement with "
+                        "the other water map on a small area shows we are probably right about what we found, not that we mapped the whole change.")
         if unstable_passes:
-            caps.append("Pass " + ", ".join(unstable_passes) + " differs by more than "
-                        f"{PASS_DRIFT_DB:g} dB from the others (wind, rain or wet soil), so open water may be missed on that date.")
+            caps.append("Pass " + ", ".join(unstable_passes) + f" looks different by more than {PASS_DRIFT_DB:g} dB from the "
+                        "others (wind, rain or wet soil), so open water may be missed on that date.")
         if place_validated is False:
-            caps.append("This place has not been compared with OPERA: the method was compared only on one lake window, "
-                        "and it disagreed with OPERA on other kinds of place.")
+            caps.append("We have not checked this place against the other water map. We only tested the method on one lake, "
+                        "and it disagreed with that map on other kinds of place.")
         if caps:
             return "Medium", " ".join(caps)
         # persistence is 1.0 by construction when config.REQUIRE_PERSISTENT is on, so it is not offered as evidence
-        reasons.append(f"{overlap_pct:.0f}% of the area we mark as new water is also water in NASA's OPERA map on the later "
-                       "date. OPERA does not tell us whether that water is new")
+        reasons.append(f"about {overlap_pct:.0f}% of the area we mark as new water is also water in another satellite's water "
+                       "map (NASA OPERA) on the later date. That map does not tell us whether the water is new")
         return "High", "Why high: " + " and ".join(reasons) + "."
     if persistence < 0.8:   # only reachable when persistence is not required (callers/tests); the app keeps only water seen on every later pass
-        return "Medium", "Part of the new water appears on only one of the later passes."
+        return "Medium", "Some of the new water only shows up in one of the later images."
     if overlap_pct is None:
-        return "Medium", "The new water was not compared with NASA's OPERA water map, so this cannot be High."
-    return "Medium", (f"{overlap_pct:.0f}% of the area we mark as new water is also water in NASA's OPERA map on the later "
-                      "date. OPERA does not tell us whether that water is new.")
+        return "Medium", "We could not compare the new water with another satellite's water map, so this cannot be High."
+    return "Medium", (f"About {overlap_pct:.0f}% of the area we mark as new water is also water in another satellite's water "
+                      "map (NASA OPERA) on the later date. That map does not tell us whether the water is new.")
