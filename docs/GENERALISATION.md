@@ -1,4 +1,4 @@
-# Why the radar water-change method over-predicts on the south neighbour, and what generalises
+# Why the radar water-change method over-predicts on the south neighbour, and what was tried
 
 Branch sanjay/accuracy. Method frozen at METHOD_VERSION water-change-v4b-before-margin-persist (not edited; every filter below is applied to its output).
 Everything here is produced by `backend/scripts/diagnose_generalisation.py` (stages `prep`, `diagnose`, `candidates`, `calibrate`). All scores are the strict
@@ -6,7 +6,7 @@ score of `eval_tonlesap.py` (became-water vs OPERA new water, only where OPERA i
 east 0.68/0.88/0.75, neighbour 0.55/0.58/0.91). IoU/precision/recall. OPERA and Sentinel-2 are second opinions, not ground truth.
 
 Windows: main = [103.90,13.05,104.12,13.27] (west/east halves); nbr = 0.22 deg south; **fresh** = 0.44 deg south (12.61-12.83 N); **fresh_e** = 0.22 deg east
-(104.12-104.34 E). Both fresh windows lie outside the main and neighbour windows, have local NISAR track 083 and OPERA tiles, and were never tuned on.
+(104.12-104.34 E). Both fresh windows lie outside the main and neighbour windows, have local NISAR track 083 and OPERA tiles, and were never tuned on. Only the 21% strip of fresh_e next to the main window could be scored; elsewhere in that window the comparable area was near zero, so fresh_e is not a clean test and its scores are shown for completeness, not as a success (docs/REVIEW.md finding 1).
 Extra data (window reads only, public): ESA WorldCover 2021 v200, Copernicus DEM 30 m (AWS), JRC Global Surface Water occurrence (Google storage).
 Passes used for "more passes" candidates: before 19 Jun, 1 Jul, 13 Jul, 25 Jul; after 23 Sep, 5 Oct, 17 Oct, 29 Oct (no after-date data ever enters a before input).
 
@@ -45,9 +45,9 @@ so OPERA agrees with us more than Sentinel-2 does there. Neither can say what is
 
 ## 2. Candidates (parameter selected on WEST IoU only; then reported on east, neighbour and the two fresh windows)
 
-Cells are IoU/precision/recall. "generalises?" = neighbour IoU +0.005 or better, east not worse than -0.01, and no fresh window worse than -0.005.
+Cells are IoU/precision/recall. "passed rule?" = neighbour IoU +0.005 or better, east not worse than -0.01, and no fresh window worse than -0.005. A pass means "passed the pre-set rule; not distinguishable from noise": the thresholds are inside the noise measured in docs/REVIEW.md (about +/- 0.04 on east, +/- 0.2 on the neighbour), and with 20 candidates and four windows some pass by chance. The fresh_e columns use only the scored strip.
 
-| candidate | param | west | east | nbr | fresh | fresh_e | dIoU east | dIoU nbr | dIoU fresh | dIoU fresh_e | generalises? |
+| candidate | param | west | east | nbr | fresh | fresh_e (strip) | dIoU east | dIoU nbr | dIoU fresh | dIoU fresh_e | passed rule? |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | frozen v4b (reference) | - | 0.69/0.90/0.74 | 0.68/0.88/0.75 | 0.55/0.58/0.91 | 0.04/0.05/0.91 | 0.78/0.86/0.89 | - | - | - | - | - |
 | landcover: drop cropland(40) | 40 | 0.20/0.76/0.22 | 0.34/0.86/0.36 | 0.51/0.57/0.83 | 0.03/0.04/0.25 | 0.24/0.85/0.25 | -0.336 | -0.041 | -0.013 | -0.545 | no |
@@ -60,17 +60,17 @@ Cells are IoU/precision/recall. "generalises?" = neighbour IoU +0.005 or better,
 | exclude JRC water occurrence >= o % | o=90 | 0.69/0.90/0.74 | 0.68/0.88/0.75 | 0.55/0.58/0.91 | 0.04/0.04/0.88 | 0.78/0.86/0.89 | +0.000 | +0.002 | -0.001 | +0.000 | no |
 | exclude WorldCover water (80) | wc80 | 0.68/0.90/0.74 | 0.67/0.88/0.74 | 0.52/0.57/0.86 | 0.04/0.04/0.89 | 0.78/0.87/0.89 | -0.007 | -0.027 | -0.001 | -0.000 | no |
 | height above JRC water < h m | h=12 | 0.69/0.90/0.74 | 0.68/0.88/0.75 | 0.55/0.58/0.91 | 0.05/0.05/0.91 | 0.00/n/a/0.00 | +0.001 | +0.000 | +0.000 | -0.782 | no |
-| not lower than JRC permanent water (height >= h m) | h=0 | 0.69/0.90/0.74 | 0.68/0.88/0.75 | 0.59/0.62/0.91 | 0.05/0.05/0.90 | 0.78/0.86/0.89 | -0.000 | +0.040 | +0.000 | +0.000 | YES |
+| not lower than JRC permanent water (height >= h m) | h=0 | 0.69/0.90/0.74 | 0.68/0.88/0.75 | 0.59/0.62/0.91 | 0.05/0.05/0.90 | 0.78/0.86/0.89 | -0.000 | +0.040 | +0.000 | +0.000 | passed rule; within noise |
 | distance to JRC water < d m | d=5000 | 0.50/0.87/0.54 | 0.42/0.88/0.45 | 0.55/0.58/0.91 | 0.03/0.03/0.23 | 0.00/n/a/0.00 | -0.254 | +0.000 | -0.015 | -0.782 | no |
-| dark on >= k of 4 after passes | k=3 | 0.68/0.90/0.74 | 0.68/0.89/0.74 | 0.55/0.59/0.91 | 0.05/0.05/0.90 | 0.80/0.89/0.89 | +0.005 | +0.006 | +0.001 | +0.016 | YES |
+| dark on >= k of 4 after passes | k=3 | 0.68/0.90/0.74 | 0.68/0.89/0.74 | 0.55/0.59/0.91 | 0.05/0.05/0.90 | 0.80/0.89/0.89 | +0.005 | +0.006 | +0.001 | +0.016 | passed rule; within noise |
 | before-pass spread < s dB | s=3.0 | 0.47/0.87/0.51 | 0.62/0.87/0.68 | 0.50/0.59/0.77 | 0.03/0.04/0.62 | 0.71/0.85/0.81 | -0.055 | -0.049 | -0.010 | -0.070 | no |
 | min patch ha | 2 | 0.69/0.91/0.74 | 0.68/0.89/0.74 | 0.55/0.58/0.91 | 0.05/0.05/0.90 | 0.79/0.87/0.89 | +0.004 | +0.001 | +0.001 | +0.007 | no |
 | change stricter than c dB | c=4 | 0.62/0.90/0.67 | 0.65/0.88/0.72 | 0.55/0.58/0.91 | 0.05/0.05/0.89 | 0.77/0.88/0.87 | -0.022 | -0.001 | +0.002 | -0.009 | no |
 | re-run: 4 before passes (06-19..07-25) | - | 0.75/0.90/0.82 | 0.71/0.88/0.79 | 0.49/0.51/0.94 | 0.05/0.05/0.87 | 0.79/0.87/0.90 | +0.034 | -0.057 | +0.001 | +0.008 | no |
-| re-run: 4 after passes (09-23..10-29) | - | 0.67/0.93/0.71 | 0.67/0.92/0.72 | 0.58/0.61/0.90 | 0.06/0.06/0.87 | 0.81/0.91/0.89 | -0.004 | +0.027 | +0.011 | +0.031 | YES |
+| re-run: 4 after passes (09-23..10-29) | - | 0.67/0.93/0.71 | 0.67/0.92/0.72 | 0.58/0.61/0.90 | 0.06/0.06/0.87 | 0.81/0.91/0.89 | -0.004 | +0.027 | +0.011 | +0.031 | passed rule; within noise |
 | re-run: 4 before + 4 after | - | 0.74/0.93/0.79 | 0.71/0.92/0.76 | 0.51/0.53/0.93 | 0.06/0.06/0.84 | 0.82/0.91/0.89 | +0.034 | -0.036 | +0.011 | +0.036 | no |
 | re-run: 3 after (09-23,10-05,10-17) | - | 0.67/0.91/0.72 | 0.67/0.90/0.73 | 0.55/0.59/0.90 | 0.05/0.05/0.89 | 0.80/0.90/0.88 | -0.005 | +0.005 | +0.001 | +0.021 | no |
-| re-run 4 after passes + height >= 0 m above JRC water (pre-specified, not tuned) | - | 0.67/0.93/0.71 | 0.67/0.92/0.72 | 0.61/0.66/0.90 | 0.06/0.06/0.87 | 0.81/0.91/0.89 | -0.004 | +0.065 | +0.011 | +0.031 | YES |
+| re-run 4 after passes + height >= 0 m above JRC water (pre-specified, not tuned) | - | 0.67/0.93/0.71 | 0.67/0.92/0.72 | 0.61/0.66/0.90 | 0.06/0.06/0.87 | 0.81/0.91/0.89 | -0.004 | +0.065 | +0.011 | +0.031 | passed rule; within noise |
 
 West-only parameter sweeps (what selected each parameter):
 
@@ -139,23 +139,23 @@ Why Kanpur's fixed cut-offs miss river water (radar on the 134,001 pixels Sentin
 - **Per-pass instability**: on S2-water pixels the 23 Sep pass is about 3 dB brighter in HH (median -12.3) than 30 Aug (-14.7), 11 Sep (-15.1) and 5 Oct (-15.0), and only 39% pass both cut-offs on 23 Sep (51-59% on the others). That fits wind roughening or rain on that date; we did not verify the weather. Because the method needs water on every after pass, one rough pass removes the pixel.
 - HV is rarely the problem (HV fails only: 0%); HH level is. Cross-track (column) position correlates weakly with HH on water (-0.23), so incidence angle is at most a minor factor over this 25 km window; sandy shallow water cannot be separated from the above with these data (no depth data).
 
-## 4. Recommended changes (exact rules) and honest status
+## 4. Candidate changes (exact rules) and honest status
 
-Wins under the stated rule (all use only general data and physics, no site constants):
+Passed the pre-set rule (not distinguishable from noise; none is shipped) (all use only general data and physics, no site constants):
 
 1. **Height rule (small, neighbour-motivated): a pixel cannot be new water if it lies lower than the nearest JRC permanent water.** Rule: height = DEM(pixel) - DEM(nearest pixel with JRC occurrence >= 75%); drop "became water" where height < 0 m.
    Result: neighbour 0.55/0.58/0.91 -> 0.59/0.62/0.91; west, east, fresh, fresh_e unchanged to 0.00. CAUTION: the rule was found by looking at the neighbour's false-positive table, so the neighbour number is not independent; the two fresh windows show no gain (the rule almost never fires there) and no harm. Copernicus DEM over water is flat/noisy, so part of this may be DEM noise; it removes 2.7k px only.
-2. **More after passes: run the same method on all four after passes (23 Sep, 5 Oct, 17 Oct, 29 Oct) instead of two.** Result: east 0.68 -> 0.67 (-0.004), neighbour 0.55 -> 0.58 (+0.027), fresh 0.04 -> 0.06, fresh_e 0.78 -> 0.81 (+0.031); precision up on every window (east 0.88 -> 0.92, neighbour 0.58 -> 0.61, fresh_e 0.86 -> 0.91), recall down 0.03 on east. West -0.02 (so it would NOT have been chosen by west tuning; it is a pre-specified candidate). It passes the rule on the neighbour and both fresh windows. Caveat: the extra passes are later than the OPERA reference date (5 Oct), so OPERA need not describe the same state; and the Tonle Sap recedes after October, so for another event the "after" passes must still be after the event only.
+2. **More after passes: run the same method on all four after passes (23 Sep, 5 Oct, 17 Oct, 29 Oct) instead of two.** Result: east 0.68 -> 0.67 (-0.004), neighbour 0.55 -> 0.58 (+0.027), fresh 0.04 -> 0.06, fresh_e 0.78 -> 0.81 (+0.031); precision up on every window (east 0.88 -> 0.92, neighbour 0.58 -> 0.61, fresh_e 0.86 -> 0.91), recall down 0.03 on east. West -0.02 (so it would NOT have been chosen by west tuning; it is a pre-specified candidate). It passes the rule on the neighbour and both fresh windows (fresh_e on the scored strip only). Caveat: the extra passes are later than the OPERA reference date (5 Oct), so OPERA need not describe the same state; and the Tonle Sap recedes after October, so for another event the "after" passes must still be after the event only.
 3. Combination of 1 and 2: east 0.67/0.92/0.72, neighbour 0.61/0.66/0.90 (+0.065), fresh 0.06, fresh_e 0.81/0.91/0.89. Same caveats.
 
 Not recommended (tried, no gain or harm): cropland/grass/wetland land-cover removal (kills recall on main, -0.34 IoU east), HV/HH gap test, stricter HV/HH, JRC permanent-water exclusion
 (no effect), WorldCover-water exclusion (-0.03 neighbour), distance-to-water, stricter persistence/min patch (negligible), before-pass spread, stricter change threshold,
-scene-self-calibrated cut-offs, 4 before passes (hurts the neighbour -0.06). "Dark on >= 3 of 4 after passes" passes the rule but its gains (+0.005 east, +0.006 neighbour) are inside noise.
+scene-self-calibrated cut-offs, 4 before passes (hurts the neighbour -0.06). "Dark on >= 3 of 4 after passes" passes the rule but its gains (+0.005 east, +0.006 neighbour) are inside noise, as are all the others that passed.
 
 ## 5. What remains unknown
 
 - **What the false "new water" actually is.** No candidate that uses land cover, level, ratio, height or stability removes the fresh south window's 287k false pixels, and no field data was used. Flooded rice/wet fields are a hypothesis, not a finding. Sentinel-2 puts neighbour precision at 0.15 (only 40% comparable, 49k predicted vs 8.9k S2 new water), so even the OPERA-based 0.58 is generous.
-- OPERA is itself limited: HLS-before is cloud-gapped (west 29% comparable, fresh_e 21%, fresh 89%), and S1 open-water misses flooded vegetation. Differences of a few IoU points (including every "YES" above) are within the noise of this one season / one track / four windows.
-- The fresh windows are one-off tests, not a distribution of unseen areas. fresh_e is a success (0.78), fresh (south) a failure (0.04), with the same method: the method's accuracy varies a lot by place and we cannot yet predict where it fails.
+- OPERA is itself limited: HLS-before is cloud-gapped on the fresh windows and masks the lake on the main window (west 29% comparable because it is mostly lake, fresh_e 21%, fresh 89%), and S1 open-water misses flooded vegetation. Differences of a few IoU points (including every "YES" above) are within the noise of this one season / one track / four windows.
+- The fresh windows are one-off tests, not a distribution of unseen areas. fresh (south) is a failure (0.04). For fresh_e only the 21% strip next to the main window could be scored (0.78 / 0.86 / 0.89); elsewhere in that window the comparable area was near zero, and where OPERA exists there 60% of our new water is not water in OPERA on the same day (docs/REVIEW.md). We do not count fresh_e as a success. The spread between places is the result, and we cannot yet predict where the method fails.
 - Kanpur and Sentinel-2 results rest on one scene each, a single optical date up to 6 days from the radar passes. The wind/rain explanation for the 23 Sep pass is inferred from backscatter only. Incidence angle and shallow-water effects were not isolated.
 - Nothing here claims accuracy outside the windows and dates measured.
