@@ -1,6 +1,6 @@
 # Documents shared in the team chat (NASA Space Apps 2026)
 
-Source: WhatsApp export "NASA SPACE APPS CHALLENGE 2026", exported 14 Nov 2026.
+This is only an index of file names the team shared, not their content. Source: WhatsApp export "NASA SPACE APPS CHALLENGE 2026", exported 14 Nov 2026.
 The export holds the chat text only. The files themselves were not in it, so they are listed here by name and are not copied into the repo. Ask the sender for the file.
 
 | Date | Shared by | Document | What it is |

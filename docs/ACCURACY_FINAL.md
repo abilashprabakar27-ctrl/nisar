@@ -1,6 +1,6 @@
 # Accuracy: final results page
 
-Branch sanjay/accuracy. App method: `water-change-v5-reliability-checks` (`backend/app/store.py`). The detection pixels are those of v4b; v5 only changed the confidence rules.
+Branch sanjay/accuracy. App method: `water-change-v5c-merged` (`backend/app/store.py`). The detection pixels are those of v4b; v5 only changed the confidence rules.
 Every number below is copied from the file named beside it. OPERA and Sentinel-2 are second opinions, not ground truth. IoU / precision / recall throughout.
 
 ## (a) Every measured result
