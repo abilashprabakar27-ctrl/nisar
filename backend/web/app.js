@@ -652,9 +652,10 @@ function plainStory(R) {
 }
 function plainStoryHTML(R) {
   const st = plainStory(R);
+  // the answer screen shows no confidence level; the PDF report (plainStory) keeps it
   return `<section class="frame plain" aria-label="What happened here, in plain words">
     <div class="lead">${esc(st.lead)}<small>What happened here, in plain words</small></div>
-    <ol>${st.items.map(([ic, t, body, cls]) => `<li class="${cls || ""}"><span class="ic" aria-hidden="true">${ic}</span><div><em>${t}</em>${body}</div></li>`).join("")}</ol>
+    <ol>${st.items.filter(([, t]) => t !== "How sure we are").map(([ic, t, body, cls]) => `<li class="${cls || ""}"><span class="ic" aria-hidden="true">${ic}</span><div><em>${t}</em>${body}</div></li>`).join("")}</ol>
   </section>`;
 }
 
@@ -662,8 +663,7 @@ function plainStoryHTML(R) {
 function renderAnswer() {
   setProgress(4); setNav("find");
   const R = S.result; if (!R) return go("find");
-  const h = R.headline, c = R.confidence, ag = R.agreement || {}, I = R.images;
-  const confCls = c.level === "High" ? "green" : c.level === "Medium" ? "amber" : "red";
+  const h = R.headline, ag = R.agreement || {}, I = R.images;
   const qual = [...new Set(R.passes.filter((p) => p.used).map((p) => p.quality))].join(" / ");
   const A = R.areas_ha, maxT = Math.max(A.became_water, A.water_receded, A.permanent_water, 1);
   const hb = (l, v, m, st) => `<div class="hbar"><span>${l}</span><span class="track"><span style="width:${100 * (v || 0) / m}%;${st}"></span></span><b>${v === null || v === undefined ? "–" : fmt(v)}</b></div>`;
@@ -698,13 +698,11 @@ function renderAnswer() {
     </div>
   </section>
   <aside class="answercard frame" aria-label="The answer">
-    <div class="row"><span class="chip ${confCls}"><span class="dot"></span>${esc(c.level)} confidence</span></div>
     <div><div class="small" style="color:#93C5FD;font-weight:600">${esc(h.label)}</div>
       <div class="bignum">${fmt(h.hectares)}<small>hectares</small></div>
       <div style="color:var(--soft);font-size:17px">${h.label === "No clear change" ? "Nothing much changed between these dates." : `${h.label === "Water likely receded" ? "dried out" : "went under water"} in ${Math.round((Date.parse(aFirst) - Date.parse(bLast)) / 864e5)} days, between ${dshort(bLast)} and ${dshort(aFirst)}`}</div></div>
     <div class="pitch"><svg width="34" height="22" viewBox="0 0 36 24" fill="none" stroke="#E6EDF3" stroke-width="1.4" aria-hidden="true"><rect x="1" y="1" width="34" height="22"/><path d="M18 1v22"/><circle cx="18" cy="12" r="4"/></svg>
       <span>That’s about <b>${fmt(h.football_pitches)} football pitches</b>, or ${h.share_of_area_pct}% of the area you picked.</span></div>
-    <p class="hint">${esc(c.reason)}</p>
     <div class="row" style="margin-top:auto;gap:18px;flex-wrap:wrap">
       <button class="linkbtn" data-go="why">Why did it change?</button>
       <button class="linkbtn" data-go="sources">Do other sources agree?</button>
