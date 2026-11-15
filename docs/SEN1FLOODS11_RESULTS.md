@@ -1,8 +1,10 @@
 # Sen1Floods11: do scene-calibrated water thresholds beat fixed ones?
 
-Written 2026-11-15. Script: `backend/scripts/eval_sen1floods11.py` (`--stage tune`, then `--stage test` once). Data: Sen1Floods11 hand-labelled chips (`team_data/datasets/sen1floods11`), split by `splits_manifest.json`.
+Written 2026-11-15. Script: `backend/scripts/eval_sen1floods11.py` (`--stage tune`, then `--stage test`, run once by protocol). Data: Sen1Floods11 hand-labelled chips (`team_data/datasets/sen1floods11`), split by `splits_manifest.json`.
 
 ## 0. Scope (read first)
+
+**This is a side experiment, C-band, not our method.** It differs from the NISAR work in sensor (C-band VV/VH vs L-band HH/HV), task (single-date water mask vs before/after change), method (one dB cut-off or a logistic regression vs our change rules) and reference (human labels vs OPERA). Its numbers must not be placed beside the NISAR numbers, and it must not be described as validating the app. What may be said: we tested one idea, calibrating the cut-off on each scene's known permanent water, on a public human-labelled C-band benchmark with leave-one-event-out and one event sealed by protocol; it did not beat a fixed cut-off (macro IoU 0.44 vs 0.43 VH, intervals overlap), so we did not ship it. Even a per-event oracle cut-off reaches only 0.44-0.50 here, so most error is not threshold choice. What may not be said: "validated on Sen1Floods11", "our method scored 0.69 on an unseen event" (that is a logistic regression on C-band, not the app), any NISAR threshold inferred from it, or "read once" as proven fact (it is by protocol).
 
 * This is **C-band Sentinel-1 (VV/VH)**, not NISAR L-band. It tests the **recipe** ("calibrate the cut-off on the scene's own JRC permanent water, no hand labels"), not any NISAR threshold.
 * Labels are human labels made mainly from Sentinel-2 optical. They under-label flooded vegetation and anything under cloud; C-band SAR also fails over flooded vegetation, wind-roughened water, shadow and urban areas. Absolute IoU is therefore low for every method (best fixed cut-off per event, with labels, only reaches 0.44 pooled VV / 0.50 VH).
@@ -69,7 +71,7 @@ Per-event IoU, LOEO (VV | VH): fixed A, best C (youden, event scale), logistic.
 | Sri-Lanka | 0.101 | 517k | 0.160 | 0.217 | 0.512 | 0.491 | 0.447 |
 | USA | 0.049 | 215k | 0.269 | 0.319 | 0.378 | 0.396 | 0.183 |
 
-## 3. Result 2, sealed test (read once, frozen parameters)
+## 3. Result 2, sealed test (read once by protocol, frozen parameters)
 
 Bolivia, a place never seen in tuning (15 chips, one event; JRC water 58k px):
 
@@ -106,8 +108,8 @@ Official test chips (10 seen events, unseen chips; pooled, macro in last column)
 ## 4. Findings
 
 1. **Scene calibration does not clearly beat a fixed cut-off.** The best calibrated variant (JRC water vs JRC land separation, `youden`, event scale) ties the fixed cut-off: LOEO macro IoU 0.441 vs 0.431 (VH) and 0.407 vs 0.394 (VV); sealed official test 0.545 vs 0.539 (VH pooled). Every interval overlaps heavily. The water-only variants (`pct`, `delta`) are worse than fixed in VV (LOEO pooled 0.295 and 0.266 vs 0.417) and about equal or slightly worse in VH. I would not claim an advantage.
-2. **Unseen place (Bolivia): calibration helped in VV.** `youden`/`delta` VV 0.62 vs fixed 0.51 (a fixed -16 dB is too strict there: oracle -13.6 dB, calibrated -13.9 / -13.5 dB, precision 0.86 but recall 0.55). In VH `youden` gave 0.653 vs 0.581. But `pct` calibration failed badly (0.27 to 0.30; threshold -8.8 dB, floods the scene) and the CI is wide (single event, 15 chips). The honest summary: promising on one new place, not proven.
-3. **Better than Otsu, always.** Otsu on the chip (0.17 to 0.19 LOEO IoU) or event (0.25 to 0.32) over-detects (precision 0.18 to 0.35) because flood scenes are mostly land. Only on Bolivia (16 % water) does event Otsu work.
+2. **Unseen place (Bolivia): two of three calibrated variants scored higher in VV; not evidence.** One event, 15 chips, about 14 variants compared, intervals overlap, one calibrated variant failed badly. `youden`/`delta` VV 0.62 vs fixed 0.51 (a fixed -16 dB is too strict there: oracle -13.6 dB, calibrated -13.9 / -13.5 dB, precision 0.86 but recall 0.55). In VH `youden` gave 0.653 vs 0.581. `pct` calibration failed badly (0.27 to 0.30; threshold -8.8 dB, floods the scene) and the CI is wide. Treat this as a post hoc subgroup, not a result.
+3. **Better than Otsu on the ten tuning events; not on Bolivia** (event Otsu VV 0.594 vs fixed 0.508 there). Otsu on the chip (0.17 to 0.19 LOEO IoU) or event (0.25 to 0.32) over-detects (precision 0.18 to 0.35) because flood scenes are mostly land. Only on Bolivia (16 % water) does event Otsu work, and there it beats the fixed cut-off.
 4. **Calibration is only as good as the JRC layer.** Calibration helped where JRC matched the scene (Spain +0.06, Ghana +0.05, USA +0.05, India +0.01 VV IoU), and hurt where it did not.
 5. **VH beat VV as a single cut-off** (fixed A: 0.462 vs 0.417 LOEO pooled) because wind roughening hurts VV (Sri-Lanka below).
 6. **Logistic regression is not a fix.** It is best on Bolivia (0.687) and Ghana/Nigeria/Mekong LOEO, but worst on Pakistan, Spain and USA (0.14, 0.38, 0.18). It over-detects (precision 0.41, recall 0.78 LOEO). It is also unstable across events.
@@ -135,7 +137,7 @@ Official test chips (10 seen events, unseen chips; pooled, macro in last column)
 
 ## 7. Implications for NISAR (recipe, not numbers)
 
-* A JRC-based scene calibration is **worth keeping as an option but must not be the only gate**: it ties a fixed cut-off on average, helped on the one unseen event, and can fail badly where JRC is stale or absent. Use the separation (`youden`) form, not a raw percentile of the water distribution, and at scene scale (not per tile).
+* A JRC-based scene calibration is **worth keeping as an option but must not be the only gate**: it ties a fixed cut-off on average, scored higher on two of three variants on the one unseen event (not evidence), and can fail badly where JRC is stale or absent. Use the separation (`youden`) form, not a raw percentile of the water distribution, and at scene scale (not per tile).
 * Add a guard: if JRC water < 500 px, or too few of them are dark (the water distribution is not plausibly dark, e.g. median above the fixed cut-off), fall back to the fixed cut-off and say so.
 * The fixed C-band numbers (-16 dB VV, -23 dB VH) are **not** NISAR numbers. Re-derive them on NISAR scenes with the same recipe (choose on tuning events, report on sealed events).
 * The main accuracy limit here is the signal (flooded vegetation, wind, shadow, urban), not the cut-off. This is the case for the NISAR change-detection and L-band double-bounce route, not for more threshold tuning.
