@@ -38,7 +38,17 @@ def answer(res: dict, q: str) -> dict:
                        "Differences come from timing, pixel size (30 m vs 20 m) and wavelength (C-band vs L-band).",
                        ["NASA OPERA DSWx-S1"])
         return out("The NASA OPERA comparison was not available for this result, so we can't say yet.")
-    if re.search(r"sure|confiden|accura|trust|right", t):
+    if re.search(r"precision|recall|\biou\b|accura|how good|how well", t):
+        v = res.get("validation") or {}
+        rows = v.get("measured") or []
+        if not rows:
+            return out(v.get("measured_note") or "No accuracy has been measured for this place.", ["validation"])
+        bits = []
+        for r in rows:
+            nums = ", ".join(f"{k} {r[k]:.2f}" for k in ("precision", "recall", "iou") if r.get(k) is not None)
+            bits.append(f"Against {r['reference']}: {nums}. {r.get('note', '')}")
+        return out(" ".join(bits) + " " + (v.get("reference_note") or "") + ".", ["validation"])
+    if re.search(r"sure|confiden|trust|right", t):
         acc = res.get("accuracy")
         lvl = conf.get('level', '')
         lead = {"High": "Fairly sure.", "Medium": "Reasonably sure.", "Lower": "Not very sure, so treat this with care."}.get(lvl, "")
