@@ -46,6 +46,8 @@ def _login():
                 os.environ["EARTHDATA_USERNAME"] = config.EARTHDATA_USERNAME
                 os.environ["EARTHDATA_PASSWORD"] = config.EARTHDATA_PASSWORD
                 _session = earthaccess.login(strategy="environment")
+            elif os.environ.get("EARTHDATA_TOKEN"):      # a user token (urs.earthdata.nasa.gov > Generate Token)
+                _session = earthaccess.login(strategy="environment")
             else:
                 _session = earthaccess.login(strategy="netrc")
         except Exception as e:

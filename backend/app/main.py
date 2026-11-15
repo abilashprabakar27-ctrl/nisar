@@ -7,14 +7,16 @@ import asyncio
 import json
 import os
 import uuid
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
 
-from . import assistant, catalog, config, downloads, partners, pipeline, resources, sample, store, watch
+from . import assistant, catalog, config, downloads, events, partners, pipeline, resources, sample, store, watch
 from .models import AnalysisRequest, AvailabilityRequest, DownloadRequest, WatchRequest
 
 from contextlib import asynccontextmanager
@@ -77,6 +79,58 @@ def places(q: str = Query(..., min_length=2)):
                      float(p["boundingbox"][3]), float(p["boundingbox"][1])]} for p in r.json()]
     _places_cache[key] = out
     return out
+
+
+EVENT_NOTE = ("Events are reported by the named source. The box is a default 25 km box around the "
+              "reported point, not a flood footprint; this tool does not claim any flood extent.")
+
+
+def _event_out(e):
+    return {**e, "reported_by": e["source"], "bbox_note": "default 25 km box around the reported point"}
+
+
+@app.get("/events/recent")
+def events_recent(days: int = Query(45, ge=1, le=180),
+                  category: str = Query("all", pattern="^(all|flood|storm|earthquake|landslide)$")):
+    evs, sources = events.recent_events(days, category)
+    return {"days": days, "category": category, "note": EVENT_NOTE, "sources": sources,
+            "events": [_event_out(e) for e in evs]}
+
+
+class EventCoverageRequest(BaseModel):
+    bbox: list[float]
+    start_date: str
+    title: str = "Reported event"
+
+
+def _coverage_response(ev):
+    try:
+        cov = events.coverage_for(ev)
+    except Exception as e:
+        raise HTTPException(503, f"NASA's data search is not reachable right now ({e.__class__.__name__}).")
+    return {"event": _event_out(ev), "coverage": cov, "verdict": cov["verdict"], "message": cov.get("message"),
+            "analysis_request": events.analysis_request(ev), "note": EVENT_NOTE}
+
+
+@app.get("/events/coverage")
+def events_coverage(id: str):
+    ev = events.find_event(id)
+    if not ev:
+        raise HTTPException(404, "No recent event with that id (it may be older than 90 days).")
+    return _coverage_response(ev)
+
+
+@app.post("/events/coverage")
+def events_coverage_post(req: EventCoverageRequest):
+    from .models import check_bbox
+    try:
+        check_bbox(req.bbox)
+        datetime.strptime(req.start_date[:10], "%Y-%m-%d")
+    except ValueError as e:
+        raise HTTPException(422, str(e))
+    ev = {"id": None, "source": "user", "title": req.title, "start_date": req.start_date[:10] + "T00:00:00Z",
+          "bbox": req.bbox}
+    return _coverage_response(ev)
 
 
 @app.post("/availability")

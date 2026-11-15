@@ -32,6 +32,8 @@ python scripts/run_area.py --name "Patna, Bihar" --bbox 85.00 25.35 85.25 25.60 
 | --- | --- | --- |
 | GET | `/health` | server status, whether an Earthdata login is set |
 | GET | `/places?q=patna` | place matches (OpenStreetMap Nominatim, cached) |
+| GET | `/events/recent?days=45&category=flood\|storm\|earthquake\|all` | recent events reported by GDACS, EONET, USGS, Copernicus EMS (de-duplicated) plus a `sources` list; a source that is down is skipped, not an error. Boxes are a default 25 km box, not a flood footprint |
+| GET/POST | `/events/coverage?id=...` (or POST `{bbox, start_date, title}`) | NISAR passes before/after the event: verdict `enough` / `waiting` / `none`, and a ready `analysis_request` for `POST /analyses` |
 | POST | `/availability` | `{bbox}` -> passes per track, quality, data gap, which questions can be answered |
 | POST | `/analyses` | `{bbox, name, question, event_date \| before+after, quick}` -> `{id, status}` at once |
 | GET | `/analyses/{id}` | status, step, progress; `result` when done; `error` when stopped |

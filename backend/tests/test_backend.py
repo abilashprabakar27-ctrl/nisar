@@ -54,16 +54,58 @@ def test_detect_water_change_finds_new_water():
     assert r.persistence > 0.9
 
 
+def test_borderline_before_is_not_permanent_and_one_pass_is_not_change():
+    rng = np.random.default_rng(1)
+    base = 10 ** (-8 / 10) * rng.gamma(4, 0.25, (160, 160))
+    # block A: before only borderline dark (-14 dB HH, -20 dB HV), clearly water after -> new water
+    # block B: dark on only ONE of the two after passes -> not counted
+    def px(hh_db, hv_db):
+        return 10 ** (hh_db / 10), 10 ** (hv_db / 10)
+    b_hh, b_hv = base.copy(), base.copy() * 10 ** (-9 / 10)
+    a1_hh, a1_hv, a2_hh, a2_hv = b_hh.copy(), b_hv.copy(), b_hh.copy(), b_hv.copy()
+    sa, sb = (slice(20, 70), slice(20, 70)), (slice(90, 140), slice(90, 140))
+    b_hh[sa], b_hv[sa] = px(-13.8, -20.0)
+    for hh, hv in ((a1_hh, a1_hv), (a2_hh, a2_hv)):
+        hh[sa], hv[sa] = px(-21, -27)
+    a1_hh[sb], a1_hv[sb] = px(-21, -27)          # only the first after pass is dark here
+    r = change.detect_water_change([b_hh, b_hh * 1.0], [a1_hh, a2_hh], 0.04,
+                                   before_hv=[b_hv, b_hv * 1.0], after_hv=[a1_hv, a2_hv])
+    assert (r.classes[sa] == change.BECAME_WATER).mean() > 0.8
+    assert (r.classes[sb] == change.BECAME_WATER).mean() < 0.05
+
+
 def test_confidence_rules():
     assert change.confidence(2, 2, 1.0, 87, 0.05, ["Provisional"])[0] == "High"
     assert change.confidence(2, 2, 1.0, 40, 0.05, ["Provisional"])[0] == "Lower"
     assert change.confidence(2, 2, 1.0, 87, 0.05, ["Beta"])[0] == "Lower"
+    # no OPERA comparison of the new water -> never High
+    assert change.confidence(2, 2, 1.0, None, 0.05, ["Provisional"])[0] == "Medium"
+
+
+def test_verify_strict_ignores_permanent_water():
+    from app.science import verify
+    from app.science.grid import Grid
+    shape = (100, 100)
+    classes = np.zeros(shape, "uint8")
+    classes[:, :50] = change.PERMANENT           # huge river/lake
+    classes[10:20, 60:70] = change.BECAME_WATER   # 100 px of genuinely new water
+    opera = np.zeros(shape, "uint8")
+    opera[:, :50] = 1                             # OPERA agrees on the permanent water, not on the new water
+    grid = Grid(32648, np.arange(100) * 20.0, np.arange(100)[::-1] * 20.0, 20.0)
+    cmp = verify.compare(classes, grid, opera)
+    assert cmp["overlap_pct"] == 0.0 and cmp["verdict"] == "Disagrees" and cmp["verdict_code"] == "disagrees"
+    assert cmp["all_water"]["overlap_pct"] > 90 and "permanent" in cmp["all_water"]["note"]
+    assert change.confidence(2, 2, 1.0, cmp["overlap_pct"], 0.05, ["Provisional"])[0] != "High"
+    opera[10:20, 60:70] = 1
+    assert verify.compare(classes, grid, opera)["verdict_code"] == "agrees"
+    none = verify.compare(np.zeros(shape, "uint8"), grid, opera)
+    assert none["overlap_pct"] is None and none["verdict"] == "No new water to check"
 
 
 def test_sample_endpoint_and_files():
     c = TestClient(app)
     r = c.get("/sample").json()
-    assert r["source"] == "sample" and r["headline"]["label"] == "Likely flooding"
+    assert r["source"] == "sample" and r["headline"]["label"] == "Possible new water"   # sample is offline, level is not High
     assert r["confidence"]["level"] in ("High", "Medium", "Lower")
     for k in ("result", "hh", "hv", "mix"):
         path = r["images"][k].split("/files/")[1]
@@ -138,3 +180,9 @@ def test_result_has_credits():
     r = c.get("/sample?rebuild=true").json()
     titles = [s["title"] for s in r["credits"]["sources"]]
     assert "ASF Data Search Vertex" in titles
+
+
+def test_tiny_new_water_cannot_be_high():
+    lvl, why = change.confidence(2, 2, 1.0, 87, 0.05, ["Provisional"], new_water_ha=68.0)
+    assert lvl == "Medium" and "too little" in why
+    assert change.confidence(2, 2, 1.0, 87, 0.05, ["Provisional"], new_water_ha=3000.0)[0] == "High"

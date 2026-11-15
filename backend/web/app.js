@@ -880,11 +880,12 @@ function renderSources() {
   setProgress(0); setNav("find");
   const R = S.result; if (!R) return go("find");
   const ag = R.agreement || {}, I = R.images;
-  const ok = ag.verdict === "Confirmed", part = ag.verdict === "Partly confirmed";
+  const ok = ag.verdict_code === "agrees", part = ag.verdict_code === "partly";
+  const cmp = ag.verdict && ag.verdict_code !== "none";
   const max = Math.max(ag.nisar_water_ha || 0, ag.opera_water_ha || 0, 1);
   const bar = (l, v, st) => `<div class="hbar"><span>${l}</span><span class="track"><span style="width:${100 * (v || 0) / max}%;${st}"></span></span><b>${fmt(v)}</b></div>`;
   ui(`<div class="page">${pageHead("05", "Do other sources agree?", `${esc(R.area.name)} · ${dshort(R.window.after[0])} 2026`)}
-    ${ag.verdict ? `
+    ${cmp ? `
     <section class="frame banner verdict ${ok ? "ok" : part ? "no" : "bad"}">
       <div><strong style="font-size:22px">${esc(ag.verdict)}</strong><div class="hint">${ok ? "Two different satellites see water in the same places." : part ? "Most of what we found is backed up, though some is only seen by one of them." : "The two sources see quite different amounts of water."}</div></div>
       <div class="row" style="margin-left:auto;gap:32px">
@@ -901,7 +902,7 @@ function renderSources() {
       <figure class="frame"><div class="tileimg"><img src="${esc(I.photo)}" alt="Normal satellite photo from NASA Worldview, likely cloudy" onerror="this.replaceWith(Object.assign(document.createElement('p'),{className:'hint',style:'padding:20px',textContent:'Photo not reachable right now.'}))"><span class="chip tag">Photo</span></div>
         <figcaption><b>Ordinary photo</b><span class="lbl">NASA Worldview · ${dshort(R.window.after[0])}</span></figcaption></figure>
     </div>
-    ${ag.verdict ? `<div>
+    ${cmp ? `<div>
       <section class="frame" style="padding:18px;display:flex;flex-direction:column;gap:14px"><h3>Water seen by each source (hectares)</h3>
         ${bar("NISAR (ours)", ag.nisar_water_ha, "background:#1D4ED8")}${bar("NASA OPERA", ag.opera_water_ha, "background:#60A5FA")}${bar("Both agree", ag.both_ha, "background:repeating-linear-gradient(90deg,#7DD3FC 0 2px,transparent 2px 5px);border:1px solid #7DD3FC")}
 </section>
@@ -1021,7 +1022,7 @@ function printReport() {
     <div style="position:relative"><img src="${abs(R.images.hh)}" alt="NISAR HH radar after the change"><img src="${abs(R.images.result)}" alt="Detected change" style="position:absolute;inset:0"></div>
     <table><tr><th>Measured</th><td>${esc(R.measured)}</td></tr><tr><th>What it likely means</th><td>${esc(R.interpreted)}</td></tr>
       <tr><th>Became water / receded / permanent</th><td>${fmt(R.areas_ha.became_water)} / ${fmt(R.areas_ha.water_receded)} / ${fmt(R.areas_ha.permanent_water)} ha</td></tr>
-      <tr><th>NASA OPERA check</th><td>${ag.verdict ? `${esc(ag.verdict)} · ${fmt(ag.overlap_pct)}% of our water confirmed` : "not available"}</td></tr>
+      <tr><th>NASA OPERA check</th><td>${ag.verdict && ag.verdict_code !== "none" ? `${esc(ag.verdict)} · ${fmt(ag.overlap_pct)}% of our water confirmed` : "not available"}</td></tr>
       <tr><th>Likely causes (interpretation)</th><td>${(R.drivers || []).filter((d) => d.verdict !== "Not checked").map((d) => `${esc(d.name)}: ${esc(d.verdict)}`).join("; ")}</td></tr></table>
     <h3 style="margin:10pt 0 4pt">What happened here, in plain words</h3>
     <p><b>${esc(plainStory(R).lead)}</b></p>

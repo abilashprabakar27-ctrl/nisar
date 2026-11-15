@@ -145,7 +145,7 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
 
     # 5. Verify
     prog.step(4, pct=80)
-    agreement = verify.run(r.classes, grid, bbox, after[0].date, folder, online=online,
+    agreement = verify.run(r.classes, grid, bbox, after[-1].date, folder, online=online,   # OPERA nearest the LAST after pass (the water must persist to it)
                            ours_water=r.first_after_water)
 
     # 6. Explain
@@ -190,21 +190,33 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
     elif agreement:
         agree_out = agreement
 
-    level, reason = change.confidence(len(before), len(after), r.persistence, overlap, r.masked_fraction, qualities)
-
     all_dates = [p.date for p in before + after]
     db_all = [change.lee_filter(change.to_db(hh[d])) for d in all_dates]
     series = change.water_area_series(db_all, r.threshold_db, grid.pixel_ha)
+
+    # Reliability checks (each fail-soft: data missing -> "not checked")
+    stab = change.radiometric_stability(all_dates, db_all, r.classes, r.threshold_db)
+    wc = data_sources.worldcover_on_grid(bbox, grid) if online else None
+    lc = change.landcover_shares(r.classes, wc)
+    validation = change.validation_status(bbox, [p.date for p in before + after], trk)
+    unstable = [f["date"] for f in stab.get("flagged", [])]
+    level, reason = change.confidence(len(before), len(after), r.persistence, overlap, r.masked_fraction, qualities,
+                                       new_water_ha=r.areas_ha.get("became_water"),
+                                       unstable_passes=unstable if stab.get("checked") else None,
+                                       cropland_share=lc.get("cropland_share") if r.areas_ha["became_water"] >= 5 else None,
+                                       place_validated=validation["this_place_validated"])
+
     per_pass = [{"date": d, "water_ha": w, "change_ha": None if i == 0 else round(w - series[i - 1], 1)}
                 for i, (d, w) in enumerate(zip(all_dates, series))]
 
     became, receded = r.areas_ha["became_water"], r.areas_ha["water_receded"]
     if became >= 5 and became >= 0.3 * receded:
-        label, hect = "Likely flooding", became
+        label, hect = ("Likely flooding" if level == "High" else "Possible new water"), became
         measured = (f"Radar brightness dropped sharply over {became:,.0f} ha between "
                     f"{before[-1].date} and {after[0].date}" +
                     (" and stayed low on the next pass." if r.persistence >= 0.8 else "."))
-        interpreted = "New water, most likely flooding. A drop like this can also come from very wet soil."
+        interpreted = ("New water, most likely flooding. A drop like this can also come from very wet soil." if level == "High"
+                       else "Radar suggests new water; this has not been checked here.")
     elif receded >= 5:
         label, hect = "Water likely receded", receded
         measured = f"Radar brightness rose over {receded:,.0f} ha that was dark (water) before."
@@ -213,8 +225,9 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
         label, hect = "No clear change", 0.0
         measured = "No area larger than 1 hectare changed beyond the 3 dB threshold."
         interpreted = "The surface looks about the same in both groups of passes."
-        if level == "High":   # "the change shows on both later passes" makes no sense when nothing changed
-            level, reason = "Medium", "We didn't spot any big change, though very small ones could be missed."
+        if level == "High":   # a High reason about new water makes no sense when nothing changed
+            level, reason = "Medium", (f"We did not find any change bigger than 1 hectare, using {len(before)} passes before and "
+                                       f"{len(after)} after. Very small or short-lived changes could still be missed.")
 
     drv = drivers.all_drivers(folder, bbox, r.classes, grid.res, [p.date for p in before],
                               [p.date for p in after], dem=dem, online=online)
@@ -222,7 +235,18 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
     limits = ["These are estimates. Very wet fields can sometimes look like water.",
               "Some spots, like steep hillsides, can't be seen clearly and are left out."]
     if any(q != "Validated" for q in qualities):
-        limits.append("Some of the satellite images are early versions, so the numbers may change a little later.")
+        limits.append("Some NISAR data used is " + "/".join(q for q in qualities if q != "Validated") +
+                      " quality; numbers may change when reprocessed.")
+    limits += change.stability_limits(stab)
+    if not stab.get("checked"):
+        limits.append(f"Pass-to-pass brightness was not checked ({stab.get('note')}).")
+    if not lc.get("checked"):
+        limits.append("Land cover (ESA WorldCover) was not checked, so we cannot say whether new water lies on cropland.")
+    elif lc.get("cropland_share") is not None and lc["cropland_share"] > change.CROPLAND_SHARE_MAX:
+        limits.append("Most detected new water lies on cropland, where radar cannot separate a flood from irrigated or "
+                      "flooded paddies; on one cropland window our map and OPERA disagreed almost completely.")
+    if not validation["this_place_validated"]:
+        limits.append("This place and these dates have not been compared with OPERA: the method was compared on one lake window (Jul to Oct 2026, track 83) only.")
     if before[-1].date <= config.DATA_GAP[1] and after[0].date >= config.DATA_GAP[0]:
         limits.append("There are no satellite images from 27 Jul to 10 Aug 2026, and we don't guess what's missing.")
 
@@ -242,6 +266,7 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
                      "football_pitches": int(round(hect / config.FOOTBALL_PITCH_HA)),
                      "share_of_area_pct": round(100 * hect / max(area_km2(bbox) * 100, 1), 1)},
         "confidence": {"level": level, "reason": reason},
+        "validation": validation,
         "measured": measured, "interpreted": interpreted,
         "agreement": agree_out,
         "per_pass": per_pass,
@@ -257,6 +282,7 @@ def run_analysis(req: dict, job_id: str | None = None, *, passes=None, reader=re
                        "threshold_hv_db": None if r.threshold_hv_db is None else round(r.threshold_hv_db, 2),
                        "change_db": config.CHANGE_DB, "resolution_m": res, "epsg": grid.epsg,
                        "masked_fraction": round(r.masked_fraction, 3), "coverage_by_date": coverage, "persistence": round(r.persistence, 3),
+                       "radiometric_stability": stab, "landcover": lc,
                        "polarization_used": "HH + HV" if r.threshold_hv_db is not None else "HH",
                        "created": datetime.now(timezone.utc).isoformat(timespec="seconds"),
                        "seconds": round(time.time() - t0, 1), "step_seconds": prog.timings},

@@ -139,3 +139,49 @@ def photo_url(bbox, day: str, width=1024) -> str:
             f"&TIME={day}&BBOX={s},{w},{n},{e}&CRS=EPSG:4326"
             "&LAYERS=MODIS_Terra_CorrectedReflectance_TrueColor,Coastlines_15m"
             f"&WRAP=day,x&FORMAT=image/jpeg&WIDTH={width}&HEIGHT={max(h, 64)}")
+
+
+# ---------------- ESA WorldCover 10 m (land cover), open COG on AWS ----------------
+WORLDCOVER_URL = ("https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/"
+                  "ESA_WorldCover_10m_2021_v200_{tile}_Map.tif")
+
+
+def worldcover_tiles(bbox) -> list[str]:
+    """3-degree tile names (south-west corner), e.g. N12E102, S03W060."""
+    w, s, e, n = bbox
+    out = []
+    for la in range(int(math.floor(s / 3)) * 3, int(math.floor((n - 1e-9) / 3)) * 3 + 1, 3):
+        for lo in range(int(math.floor(w / 3)) * 3, int(math.floor((e - 1e-9) / 3)) * 3 + 1, 3):
+            out.append(f"{'N' if la >= 0 else 'S'}{abs(la):02d}{'E' if lo >= 0 else 'W'}{abs(lo):03d}")
+    return out
+
+
+def worldcover_on_grid(bbox, grid) -> np.ndarray | None:
+    """WorldCover class codes (uint8, 0 = no data) on the analysis grid, window read only. None if unavailable (offline etc.)."""
+    try:
+        import rasterio
+        import rasterio.warp as rw
+        from rasterio.crs import CRS
+        from rasterio.enums import Resampling
+        from rasterio.transform import from_origin
+        from rasterio.windows import from_bounds
+        out = np.zeros(grid.shape, "uint8")
+        got = False
+        b = [bbox[0] - 0.01, bbox[1] - 0.01, bbox[2] + 0.01, bbox[3] + 0.01]
+        with rasterio.Env(GDAL_HTTP_TIMEOUT="30", GDAL_HTTP_MAX_RETRY="1", GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR"):
+            for t in worldcover_tiles(bbox):
+                try:
+                    with rasterio.open(WORLDCOVER_URL.format(tile=t)) as src:
+                        win = from_bounds(*b, transform=src.transform).round_offsets().round_lengths()
+                        arr = src.read(1, window=win, boundless=True, fill_value=0)
+                        tmp = np.zeros(grid.shape, "uint8")
+                        rw.reproject(arr, tmp, src_transform=src.window_transform(win), src_crs=src.crs,
+                                     dst_transform=from_origin(grid.x[0] - grid.res / 2, grid.y[0] + grid.res / 2, grid.res, grid.res),
+                                     dst_crs=CRS.from_epsg(grid.epsg), resampling=Resampling.nearest, dst_nodata=0)
+                        out = np.where(out == 0, tmp, out)
+                        got = True
+                except Exception:
+                    continue
+        return out if got and (out > 0).mean() > 0.5 else None
+    except Exception:
+        return None

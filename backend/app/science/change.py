@@ -1,11 +1,15 @@
-"""Water-change detection on NISAR HH backscatter.
+"""Water-change detection on NISAR HH (and HV) backscatter.
 
 Method (explainable, no trained model):
 1. linear power -> decibels; Lee speckle filter
 2. median composite of the before passes and of the after passes
-3. water threshold from Otsu on the after image (clamped to a physical range)
+3. water = fixed HH + HV cut-offs (config.py; Otsu on the after image is an optional mode, not the default)
 4. classes: became water / water receded / permanent water / no change / masked
 5. drop patches smaller than 1 hectare
+
+v4 accuracy rules (docs/accuracy_log.md): a pixel counts as water BEFORE only if clearly dark (cut-off minus
+WATER_BEFORE_MARGIN_DB), so borderline-dark land is not locked in as 'permanent'; new water must be water on
+every after pass.
 """
 from dataclasses import dataclass, field
 
@@ -123,14 +127,20 @@ def detect_water_change(before: list[np.ndarray], after: list[np.ndarray], pixel
     if extra_mask is not None:
         invalid |= extra_mask
 
-    def is_water(hh, hv):
-        w = hh < thr
+    def is_water(hh, hv, margin_hh=0.0, margin_hv=None):
+        """margin > 0 demands darker pixels (stricter); margin < 0 allows brighter ones (looser)."""
+        margin_hv = margin_hh if margin_hv is None else margin_hv
+        w = hh < thr - margin_hh
         if hv is not None:
-            w &= np.where(np.isfinite(hv), hv < thr_hv, True)
+            w &= np.where(np.isfinite(hv), hv < thr_hv - margin_hv, True)
         return w
 
-    water_b = is_water(bc, bhv) & ~invalid
+    water_b = is_water(bc, bhv, config.WATER_BEFORE_MARGIN_DB) & ~invalid
     water_a = is_water(ac, ahv) & ~invalid
+    if config.HYST_HH_EXTRA_DB > 0 or config.HYST_HV_EXTRA_DB > 0:
+        # hysteresis: keep strict water as seeds, add looser-water pixels within a few pixels of a seed
+        loose = is_water(ac, ahv, -config.HYST_HH_EXTRA_DB, -config.HYST_HV_EXTRA_DB) & ~invalid
+        water_a = ndimage.binary_dilation(water_a, iterations=max(config.HYST_MAX_PX, 1), mask=loose) | water_a
 
     # every after pass must agree, so one odd pass (wind, rain, crop growth) cannot create change
     each_after_water = [is_water(a_db[i], ahv_db[i] if use_hv else None) for i in range(len(a_db))]
@@ -139,7 +149,13 @@ def detect_water_change(before: list[np.ndarray], after: list[np.ndarray], pixel
     all_after_dry = np.logical_and.reduce(each_after_dry)
 
     min_px = int(np.ceil(config.MIN_PATCH_HA / pixel_ha))
-    became = remove_small(water_a & ~water_b & (diff < -config.CHANGE_DB), min_px)
+    cand = water_a & ~water_b & (diff < -config.CHANGE_DB)
+    if config.REQUIRE_PERSISTENT:
+        cand &= all_after_water
+    if config.AFTER_VAR_MAX_DB > 0 and len(a_db) > 1:
+        spread = np.nanmax(np.stack(a_db), axis=0) - np.nanmin(np.stack(a_db), axis=0)
+        cand &= ~(spread > config.AFTER_VAR_MAX_DB)
+    became = remove_small(cand, min_px)
     receded = remove_small(water_b & ~water_a & (diff > config.CHANGE_DB) & all_after_dry, 2 * min_px)
     permanent = water_b & water_a
 
@@ -181,22 +197,184 @@ def water_area_series(passes_db: list[np.ndarray], threshold_db: float, pixel_ha
     return out
 
 
+# Provisional reliability limits. They come from 2 observed failures (docs/accuracy_log.md "Reliability checks"), not from tuning:
+# do not adjust them to make outputs look better.
+PASS_DRIFT_DB = 1.5          # a pass this far from the median of all passes is not comparable (Kanpur 23 Sep was ~3 dB brighter)
+CROPLAND_SHARE_MAX = 0.50    # more new water than this on cropland -> not above Lower (cropland plains south of Tonle Sap, IoU 0.04)
+WC_CROPLAND, WC_BUILT = 40, 50
+
+# Tonle Sap lake window: the only place compared with OPERA (became-water score), see docs/accuracy_log.md
+TONLE_SAP_VALIDATED_BBOX = (103.90, 13.05, 104.12, 13.27)   # name kept for imports; it is a "compared here" box, not a validation
+COMPARED_PERIOD = ("2026-07-01", "2026-10-31")
+COMPARED_TRACK = 83
+COMPARED_WITH_OPERA = [
+    "Tonle Sap lake window (103.90-104.12 E, 13.05-13.27 N), Jul to Oct 2026, NISAR track 83: the settings were chosen on this "
+    "window. Score on the half not used for sweeps: IoU 0.68 [0.64-0.72], precision 0.88, recall 0.75, compared with OPERA "
+    "new water (docs/accuracy_log.md). This is a comparison with another radar-based map, not validated, and OPERA is not ground truth.",
+]
+KNOWN_FAILURES = [
+    "cropland plains: IoU 0.04 on one window south of Tonle Sap, 301k px predicted as new water vs 15k in OPERA (docs/GENERALISATION.md)",
+    "Sentinel-2 check disagreed on 2 of 2 scored areas: south of Tonle Sap precision 0.15, Kanpur recall 0.03 (docs/accuracy_log.md)",
+]
+
+# Accuracy is shown ONLY for the three story places, where something was actually measured. Static recorded results,
+# not computed at runtime. Sources: docs/STORIES_RESULTS.md, docs/accuracy_log.md, and the Patna run in
+# vercel-demo/content/results/a26fddac73226d52.json. Anywhere else the answer is 'not measured'.
+STORY_MATCH_PAD_DEG = 0.15      # a searched box counts as the story place if its centre is within this of the story box
+STORIES = {
+    "patna": {"name": "Patna, Bihar", "bbox": [85.00, 25.35, 85.25, 25.60],
+              "rows": [{"reference": "NASA OPERA", "what": "all water on the later date (includes permanent river and lake water, so not a test of change)",
+                        "iou": 0.23, "precision": 0.40, "recall": 0.36,
+                        "note": "12 and 24 Sep passes, track 98 A, run with the earlier method version. The two maps disagree: 1,685 ha of ours against 1,879 ha in OPERA, 675 ha shared.",
+                        "source": "Patna run in vercel-demo/content/results/a26fddac73226d52.json"}],
+              "summary": "Weak: our water and OPERA's overlap on only part of the area."},
+    "kanpur": {"name": "Kanpur, Uttar Pradesh", "bbox": [80.25, 26.35, 80.50, 26.60],
+               "rows": [{"reference": "NASA OPERA", "what": "our 68 ha of new water vs OPERA water on the later date",
+                         "iou": None, "precision": 0.86, "recall": None,
+                         "note": "58 of our 68 ha are water in OPERA, new or not. This says nothing about how much we missed, or whether the water is new.",
+                         "source": "docs/STORIES_RESULTS.md"},
+                        {"reference": "Sentinel-2", "what": "our new water vs optical new water (97% of the window comparable)",
+                         "iou": 0.03, "precision": 0.14, "recall": 0.03,
+                         "note": "The two maps disagree. Sentinel-2 shows far more new water than we found. It is another satellite product, not ground truth.",
+                         "source": "docs/accuracy_log.md, Sentinel-2 check"}],
+               "summary": "The two checks disagree, so we cannot say how well this was mapped."},
+    "morigaon": {"name": "Morigaon, Assam", "bbox": [92.15, 26.15, 92.40, 26.40], "rows": [],
+                 "not_measured_reason": "No OPERA map exists near the last pass and no clear Sentinel-2 scene was available (monsoon cloud).",
+                 "summary": "Not measured."},
+}
+REFERENCE_NOTE = "OPERA and Sentinel-2 are other satellite products, not ground truth"
+NO_STORY_NOTE = "No accuracy has been measured for this place. Accuracy is shown only for the three story places."
+
+
+def story_for(bbox):
+    """The story place a searched box belongs to (its centre lies in the story box, with a small pad), else None."""
+    w, s_, e, n = bbox
+    cx, cy = (w + e) / 2, (s_ + n) / 2
+    pad = STORY_MATCH_PAD_DEG
+    for sid, st in STORIES.items():
+        bw, bs, be, bn = st["bbox"]
+        if bw - pad <= cx <= be + pad and bs - pad <= cy <= bn + pad:
+            return sid
+    return None
+
+
+def _track_num(track) -> int | None:
+    try:
+        return int(str(track).strip().lstrip("0") or 0)
+    except ValueError:
+        return None
+
+
+def validation_status(bbox, dates: list[str] | None = None, track=None) -> dict:
+    """What has really been compared with OPERA, and whether this request is covered. Only measured numbers, with sources.
+    'Compared here' needs the bbox inside the window AND all before/after dates inside the compared period AND track 083."""
+    w, s, e, n = bbox
+    bw, bs, be, bn = TONLE_SAP_VALIDATED_BBOX
+    inside = w >= bw - 1e-6 and s >= bs - 1e-6 and e <= be + 1e-6 and n <= bn + 1e-6
+    in_period = bool(dates) and all(COMPARED_PERIOD[0] <= str(d)[:10] <= COMPARED_PERIOD[1] for d in dates)
+    ok = inside and in_period and _track_num(track) == COMPARED_TRACK
+    sid = story_for(bbox)
+    return {
+        "compared_with_opera": list(COMPARED_WITH_OPERA),
+        "known_failures": list(KNOWN_FAILURES),
+        "this_place": ("compared with OPERA here for Jul to Oct 2026, track 83; other dates are not checked" if ok
+                       else "not compared here"),
+        "this_place_validated": ok,
+        "human_labelled_accuracy": "not measured",
+        "story": sid,
+        "story_name": STORIES[sid]["name"] if sid else None,
+        "measured": [dict(r) for r in STORIES[sid]["rows"]] if sid else [],
+        "measured_note": (STORIES[sid].get("not_measured_reason") or STORIES[sid]["summary"]) if sid else NO_STORY_NOTE,
+        "reference_note": REFERENCE_NOTE,
+    }
+
+
+def radiometric_stability(dates: list[str], dbs: list[np.ndarray], classes: np.ndarray, thr_db: float,
+                          tol_db: float = PASS_DRIFT_DB) -> dict:
+    """Median HH (dB) of each pass over pixels that are land in every pass (not masked, never classed as water,
+    never darker than the water cut-off). A pass far from the others is not comparable with them."""
+    if len(dates) < 2 or len(dbs) != len(dates):
+        return {"checked": False, "note": "needs at least 2 passes"}
+    st = np.stack(dbs)
+    land = np.isfinite(st).all(axis=0) & (st > thr_db).all(axis=0) & (classes == NO_CHANGE)
+    n = int(land.sum())
+    if n < 1000:
+        return {"checked": False, "note": f"only {n} stable land pixels"}
+    med = {d: float(np.median(db[land])) for d, db in zip(dates, dbs)}
+    ref = float(np.median(list(med.values())))
+    dev = {d: round(m - ref, 2) for d, m in med.items()}
+    flagged = [{"date": d, "offset_db": v} for d, v in dev.items() if abs(v) > tol_db]
+    return {"checked": True, "land_pixels": n, "median_hh_db": {d: round(m, 2) for d, m in med.items()},
+            "median_of_passes_db": round(ref, 2), "offset_db": dev, "tolerance_db": tol_db, "flagged": flagged}
+
+
+def stability_limits(stab: dict) -> list[str]:
+    out = []
+    for f in stab.get("flagged", []):
+        v = f["offset_db"]
+        out.append(f"Pass {f['date']} is {abs(v):.1f} dB {'brighter' if v > 0 else 'darker'} than the others, likely wind, "
+                   f"rain or wet soil, so open water may be missed on that date.")
+    return out
+
+
+def landcover_shares(classes: np.ndarray, wc: np.ndarray | None) -> dict:
+    """Share of 'became water' pixels on cropland / built-up (ESA WorldCover). wc None -> not checked."""
+    if wc is None:
+        return {"checked": False, "note": "ESA WorldCover not available, not checked"}
+    m = classes == BECAME_WATER
+    n = int(m.sum())
+    if n == 0:
+        return {"checked": True, "became_water_px": 0, "cropland_share": None, "builtup_share": None}
+    return {"checked": True, "became_water_px": n,
+            "cropland_share": round(float((wc[m] == WC_CROPLAND).mean()), 3),
+            "builtup_share": round(float((wc[m] == WC_BUILT).mean()), 3)}
+
+
 def confidence(n_before: int, n_after: int, persistence: float, overlap_pct: float | None,
-               masked_fraction: float, qualities: list[str]) -> tuple[str, str]:
-    """Rules from the Night Shift 1 pack."""
+               masked_fraction: float, qualities: list[str], new_water_ha: float | None = None,
+               unstable_passes: list[str] | None = None, cropland_share: float | None = None,
+               place_validated: bool | None = None) -> tuple[str, str]:
+    """Rules from the Night Shift 1 pack plus three reliability checks (docs/accuracy_log.md "Reliability checks").
+
+    overlap_pct is verify.compare's headline: the share of our new-water pixels that are any OPERA water class 1-3 on
+    the AFTER date (it does not test that the water is new; no OPERA before map is used), never one that counts permanent water. Without it (no OPERA check, or no new water) the level cannot be High.
+    Reliability inputs (None = not checked, rule skipped): unstable_passes (dates whose land brightness differs from
+    the others), cropland_share (share of new water on cropland), place_validated (bbox, dates and track match the one window compared with OPERA).
+    """
     reasons = []
     if "Beta" in qualities:
         return "Lower", "Some of the satellite images are early versions, so treat this with care."
     if masked_fraction > 0.15:
         return "Lower", "Part of the area couldn't be seen clearly."
     if overlap_pct is not None and overlap_pct < 50:
-        return "Lower", "Another satellite's water map sees this area quite differently, so treat it with care."
-    high = n_before >= 2 and n_after >= 2 and persistence >= 0.8 and (overlap_pct is None or overlap_pct >= 75)
+        return "Lower", f"Only about {overlap_pct:.0f}% of the area we mark as new water is also water in another satellite's water map (NASA OPERA), so treat it with care."
+    # the cropland cap stands in for a missing check: where OPERA also shows water over >= 75% of the new water, a flooded
+    # floodplain of paddies is likely real flooding, so the cap applies only when no other water map agrees
+    if (cropland_share is not None and cropland_share > CROPLAND_SHARE_MAX
+            and (overlap_pct is None or overlap_pct < 75)):
+        return "Lower", (f"Most of the new water ({cropland_share:.0%}) is on farmland. Radar can't tell a flood from "
+                         "flooded rice fields, and on one farmland test our map and the other satellite's map disagreed almost completely.")
+    high = n_before >= 2 and n_after >= 2 and persistence >= 0.8 and overlap_pct is not None and overlap_pct >= 75
     if high:
-        reasons.append("the change shows up in more than one later image")
-        if overlap_pct is not None:
-            reasons.append("another satellite's water map backs it up")
+        caps = []
+        if new_water_ha is not None and new_water_ha < config.MIN_HIGH_CONF_HA:
+            caps.append(f"Only {new_water_ha:.0f} ha of new water was found, which is too little to call High. Agreement with "
+                        "the other water map on a small area shows we are probably right about what we found, not that we mapped the whole change.")
+        if unstable_passes:
+            caps.append("Pass " + ", ".join(unstable_passes) + f" looks different by more than {PASS_DRIFT_DB:g} dB from the "
+                        "others (wind, rain or wet soil), so open water may be missed on that date.")
+        if place_validated is False:
+            caps.append("We have not checked this place against the other water map. We only tested the method on one lake, "
+                        "and it disagreed with that map on other kinds of place.")
+        if caps:
+            return "Medium", " ".join(caps)
+        # persistence is 1.0 by construction when config.REQUIRE_PERSISTENT is on, so it is not offered as evidence
+        reasons.append(f"about {overlap_pct:.0f}% of the area we mark as new water is also water in another satellite's water "
+                       "map (NASA OPERA) on the later date. That map does not tell us whether the water is new")
         return "High", "Why high: " + " and ".join(reasons) + "."
-    if persistence < 0.8:
+    if persistence < 0.8:   # only reachable when persistence is not required (callers/tests); the app keeps only water seen on every later pass
         return "Medium", "Some of the new water only shows up in one of the later images."
-    return "Medium", "Another satellite's water map only partly backs this up."
+    if overlap_pct is None:
+        return "Medium", "We could not compare the new water with another satellite's water map, so this cannot be High."
+    return "Medium", (f"About {overlap_pct:.0f}% of the area we mark as new water is also water in another satellite's water "
+                      "map (NASA OPERA) on the later date. That map does not tell us whether the water is new.")

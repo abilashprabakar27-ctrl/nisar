@@ -1,7 +1,7 @@
 {
  "places": [
   {
-   "key": "a26fddac73226d52",
+   "key": "bd9821dc303adeea",
    "name": "Patna, Bihar",
    "bbox": [
     85.0,
@@ -103,5 +103,5 @@
    "story": "September 2026 Bihar floods (Punpun river)"
   }
  ],
- "sample": "9cc795db09c8dbc3"
+ "sample": "cc536f424211eaf4"
 }

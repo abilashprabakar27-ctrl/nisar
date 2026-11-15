@@ -1,0 +1,83 @@
+{
+  "status": "ok",
+  "source": "saved",
+  "bbox": [
+    103.9,
+    13.05,
+    104.12,
+    13.27
+  ],
+  "before": [
+    {
+      "scene": "NISAR_L2_PR_GCOV_024_083_A_008_2005_DHDH_M_20260701T223636_20260701T223711_P05023_N_F_J_001",
+      "date": "2026-07-01",
+      "track": 83,
+      "direction": "ASCENDING",
+      "frame": 8,
+      "quality": "PROVISIONAL"
+    },
+    {
+      "scene": "NISAR_L2_PR_GCOV_025_083_A_008_2005_DHDH_M_20260713T223636_20260713T223710_P05023_N_F_J_001",
+      "date": "2026-07-13",
+      "track": 83,
+      "direction": "ASCENDING",
+      "frame": 8,
+      "quality": "PROVISIONAL"
+    },
+    {
+      "scene": "NISAR_L2_PR_GCOV_026_083_A_008_2005_DHDH_M_20260725T223635_20260725T223709_P05023_N_F_J_001",
+      "date": "2026-07-25",
+      "track": 83,
+      "direction": "ASCENDING",
+      "frame": 8,
+      "quality": "PROVISIONAL"
+    }
+  ],
+  "after": [
+    {
+      "scene": "NISAR_L2_PR_GCOV_030_083_A_008_2005_DHDH_M_20260911T223633_20260911T223708_P05023_N_F_J_001",
+      "date": "2026-09-11",
+      "track": 83,
+      "direction": "ASCENDING",
+      "frame": 8,
+      "quality": "PROVISIONAL"
+    },
+    {
+      "scene": "NISAR_L2_PR_GCOV_031_083_A_008_2005_DHDH_M_20260923T223633_20260923T223708_P05023_N_F_J_001",
+      "date": "2026-09-23",
+      "track": 83,
+      "direction": "ASCENDING",
+      "frame": 8,
+      "quality": "PROVISIONAL"
+    },
+    {
+      "scene": "NISAR_L2_PR_GCOV_032_083_A_008_2005_DHDH_M_20261005T223633_20261005T223708_P05023_N_F_J_001",
+      "date": "2026-10-05",
+      "track": 83,
+      "direction": "ASCENDING",
+      "frame": 8,
+      "quality": "PROVISIONAL"
+    }
+  ],
+  "area_ha": {
+    "likely_became_water": 6756.6,
+    "likely_water_receded": 19.64,
+    "likely_flooded_vegetation": 610.04,
+    "no_change": 49704.76
+  },
+  "confidence": "High",
+  "confidence_reason": "changed pixels persist (80% of 3 after-passes agree; 2% masked).",
+  "masked_fraction": 0.023441760283865548,
+  "limits": [
+    "Before/after passes straddle the permanent data gap 2026-07-27 to 2026-08-10; the gap is not filled.",
+    "Too few changed pixels for an adaptive brightening (water receded / flooded vegetation) threshold; fixed 3 dB used."
+  ],
+  "result_map": null,
+  "message": "Likely changes only; not confirmed.",
+  "quality_level": "PROVISIONAL",
+  "polarization": "HH+HV",
+  "method_version": "floods-0.2.0",
+  "referee_files": [],
+  "measured": "Radar backscatter in HH changed by a median -8.2 dB over 7386.3 ha; thresholds -4.6/+3.0 dB (Otsu/fixed).",
+  "interpreted": "Likely 6756.6 ha became water, 19.6 ha water receded, 610.0 ha flooded vegetation; not confirmed."
+}
