@@ -3,7 +3,7 @@
 NASA Space Apps Challenge 2026, "Dancing with the SARs".
 
 **Try it online: https://nisar-vercel-demo.vercel.app**
-The online demo has the prepared flood stories (currently: Patna and Kanpur); the full app below runs any place locally.
+The online demo has three prepared flood stories (Patna, Kanpur and Morigaon); the full app below runs any place locally.
 
 - A web app that shows where water has newly appeared (or gone) in a place you pick, using NASA-ISRO NISAR radar.
 - It writes the answer in plain words, with a confidence label and the reasons for it.
