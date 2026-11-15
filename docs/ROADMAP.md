@@ -50,7 +50,15 @@ Nothing here has been done. Effort is a rough guess for one person; risk is what
 - Effort: a few hours.
 - Risk: low effort, but a missed restriction is a real problem if the data or derived labels are shared.
 
-## 9. Fix trailer formatting of some commits
+## 9. Statistics and checks from the independent review (docs/REVIEW.md)
+- Score the scene with a paired bootstrap (2 km blocks), so a baseline-to-final difference gets an interval instead of an assertion.
+- Re-derive the review's interval table with a committed script over the cached arrays (about 40 lines). Until then every interval in the docs is "from the review, bootstrap over 2 km blocks, re-derive before quoting".
+- Make the OPERA check test newness: pass OPERA-before (`opera_before`) so the app's overlap is "our new water that OPERA also marks as new", not "any OPERA water on the later date". The current check does not test whether the water is new.
+- Calibrate the confidence levels against outcomes. Today they are rule-based labels set from the same five cases; no level has been compared with an outcome it was not fitted to. Medium still spans "probably fine" and "85% wrong by the optical check".
+- Report precision, recall and false-alarm rate with prevalence beside them, and do not rank windows by IoU.
+- Risk: more re-tuning on these windows would add to the contamination; keep a sealed window.
+
+## 10. Fix trailer formatting of some commits
 - Why: several earlier commit messages put the Co-Authored-By and Claude-Session trailers on the same line as the subject or each other instead of in a separate block after a blank line.
 - Data: git history of branch sanjay/accuracy.
 - Effort: minutes.
