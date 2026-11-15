@@ -149,3 +149,33 @@ def test_existing_rules_still_win():
     assert conf(overlap_pct=40, place_validated=True)[0] == "Lower"
     lvl, why = conf(new_water_ha=68.0, place_validated=False, unstable_passes=["x"])
     assert lvl == "Medium" and "too little" in why and "not checked this place" in why
+
+
+def test_accuracy_is_shown_only_for_story_places():
+    from app.science import change
+    for sid, st in change.STORIES.items():
+        w, so, e, n = st["bbox"]
+        v = change.validation_status((w + 0.05, so + 0.05, e - 0.05, n - 0.05))
+        assert v["story"] == sid and v["story_name"] == st["name"]
+        assert v["human_labelled_accuracy"] == "not measured"
+        assert v["reference_note"] == "OPERA and Sentinel-2 are other satellite products, not ground truth"
+    assert change.validation_status((92.2, 26.2, 92.3, 26.3))["measured"] == []      # Morigaon: nothing measured
+    assert "monsoon cloud" in change.validation_status((92.2, 26.2, 92.3, 26.3))["measured_note"]
+    k = change.validation_status((80.3, 26.4, 80.45, 26.55))["measured"]
+    assert {r["reference"] for r in k} == {"NASA OPERA", "Sentinel-2"}
+    # a place that is not a story shows no numbers and says so
+    far = change.validation_status((103.9, 13.05, 104.12, 13.27))
+    assert far["story"] is None and far["measured"] == [] and "only for the three story places" in far["measured_note"]
+    text = " ".join(str(x) for st in change.STORIES.values() for r in st["rows"] for x in r.values()).lower()
+    for bad in ("confirmed", "validated", "independent", "beats", "sen1floods11"):
+        assert bad not in text
+
+
+def test_assistant_answers_accuracy_from_the_story_rows():
+    from app import assistant
+    from app.science import change
+    res = {"confidence": {"level": "Medium", "reason": "x"}, "validation": change.validation_status((80.3, 26.4, 80.45, 26.55))}
+    a = assistant.answer(res, "what is the precision and recall?")
+    assert "Sentinel-2" in a["answer"] and "0.14" in a["answer"] and "not ground truth" in a["answer"]
+    none = assistant.answer({"validation": change.validation_status((103.9, 13.05, 104.12, 13.27))}, "how accurate is it?")
+    assert "No accuracy has been measured" in none["answer"]

@@ -217,6 +217,46 @@ KNOWN_FAILURES = [
     "Sentinel-2 check disagreed on 2 of 2 scored areas: south of Tonle Sap precision 0.15, Kanpur recall 0.03 (docs/accuracy_log.md)",
 ]
 
+# Accuracy is shown ONLY for the three story places, where something was actually measured. Static recorded results,
+# not computed at runtime. Sources: docs/STORIES_RESULTS.md, docs/accuracy_log.md, and the Patna run in
+# vercel-demo/content/results/a26fddac73226d52.json. Anywhere else the answer is 'not measured'.
+STORY_MATCH_PAD_DEG = 0.15      # a searched box counts as the story place if its centre is within this of the story box
+STORIES = {
+    "patna": {"name": "Patna, Bihar", "bbox": [85.00, 25.35, 85.25, 25.60],
+              "rows": [{"reference": "NASA OPERA", "what": "all water on the later date (includes permanent river and lake water, so not a test of change)",
+                        "iou": 0.23, "precision": 0.40, "recall": 0.36,
+                        "note": "12 and 24 Sep passes, track 98 A, run with the earlier method version. The two maps disagree: 1,685 ha of ours against 1,879 ha in OPERA, 675 ha shared.",
+                        "source": "Patna run in vercel-demo/content/results/a26fddac73226d52.json"}],
+              "summary": "Weak: our water and OPERA's overlap on only part of the area."},
+    "kanpur": {"name": "Kanpur, Uttar Pradesh", "bbox": [80.25, 26.35, 80.50, 26.60],
+               "rows": [{"reference": "NASA OPERA", "what": "our 68 ha of new water vs OPERA water on the later date",
+                         "iou": None, "precision": 0.86, "recall": None,
+                         "note": "58 of our 68 ha are water in OPERA, new or not. This says nothing about how much we missed, or whether the water is new.",
+                         "source": "docs/STORIES_RESULTS.md"},
+                        {"reference": "Sentinel-2", "what": "our new water vs optical new water (97% of the window comparable)",
+                         "iou": 0.03, "precision": 0.14, "recall": 0.03,
+                         "note": "The two maps disagree. Sentinel-2 shows far more new water than we found. It is another satellite product, not ground truth.",
+                         "source": "docs/accuracy_log.md, Sentinel-2 check"}],
+               "summary": "The two checks disagree, so we cannot say how well this was mapped."},
+    "morigaon": {"name": "Morigaon, Assam", "bbox": [92.15, 26.15, 92.40, 26.40], "rows": [],
+                 "not_measured_reason": "No OPERA map exists near the last pass and no clear Sentinel-2 scene was available (monsoon cloud).",
+                 "summary": "Not measured."},
+}
+REFERENCE_NOTE = "OPERA and Sentinel-2 are other satellite products, not ground truth"
+NO_STORY_NOTE = "No accuracy has been measured for this place. Accuracy is shown only for the three story places."
+
+
+def story_for(bbox):
+    """The story place a searched box belongs to (its centre lies in the story box, with a small pad), else None."""
+    w, s_, e, n = bbox
+    cx, cy = (w + e) / 2, (s_ + n) / 2
+    pad = STORY_MATCH_PAD_DEG
+    for sid, st in STORIES.items():
+        bw, bs, be, bn = st["bbox"]
+        if bw - pad <= cx <= be + pad and bs - pad <= cy <= bn + pad:
+            return sid
+    return None
+
 
 def _track_num(track) -> int | None:
     try:
@@ -233,6 +273,7 @@ def validation_status(bbox, dates: list[str] | None = None, track=None) -> dict:
     inside = w >= bw - 1e-6 and s >= bs - 1e-6 and e <= be + 1e-6 and n <= bn + 1e-6
     in_period = bool(dates) and all(COMPARED_PERIOD[0] <= str(d)[:10] <= COMPARED_PERIOD[1] for d in dates)
     ok = inside and in_period and _track_num(track) == COMPARED_TRACK
+    sid = story_for(bbox)
     return {
         "compared_with_opera": list(COMPARED_WITH_OPERA),
         "known_failures": list(KNOWN_FAILURES),
@@ -240,6 +281,11 @@ def validation_status(bbox, dates: list[str] | None = None, track=None) -> dict:
                        else "not compared here"),
         "this_place_validated": ok,
         "human_labelled_accuracy": "not measured",
+        "story": sid,
+        "story_name": STORIES[sid]["name"] if sid else None,
+        "measured": [dict(r) for r in STORIES[sid]["rows"]] if sid else [],
+        "measured_note": (STORIES[sid].get("not_measured_reason") or STORIES[sid]["summary"]) if sid else NO_STORY_NOTE,
+        "reference_note": REFERENCE_NOTE,
     }
 
 
