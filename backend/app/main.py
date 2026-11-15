@@ -223,6 +223,15 @@ def ask_result(key: str, body: dict):
     return assistant.answer(res, str(body.get("question", ""))[:300])
 
 
+@app.get("/results/{key}/questions")
+def result_questions(key: str):
+    """The common questions this result's own data can answer (may be empty)."""
+    res = store.load_result(key)
+    if not res:
+        raise HTTPException(404, "No saved result with that key")
+    return assistant.questions(res)
+
+
 @app.get("/results/{key}")
 def get_result(key: str):
     res = store.load_result(key)

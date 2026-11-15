@@ -178,4 +178,4 @@ def test_assistant_answers_accuracy_from_the_story_rows():
     a = assistant.answer(res, "what is the precision and recall?")
     assert "Sentinel-2" in a["answer"] and "0.14" in a["answer"] and "not ground truth" in a["answer"]
     none = assistant.answer({"validation": change.validation_status((103.9, 13.05, 104.12, 13.27))}, "how accurate is it?")
-    assert "No accuracy has been measured" in none["answer"]
+    assert none["answer"] == assistant.FALLBACK and not none["answerable"]   # no measured rows: one-line fallback, no claim

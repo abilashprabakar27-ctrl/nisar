@@ -103,10 +103,13 @@ async function demoApi(path, opts = {}) {
     return { status: "done", progress: 100, step: "done", result: await demoJson(`content/results/${job.key}.json`) };
   }
   if (route === "/sample") return demoJson(`content/results/${DEMO.prepared.sample}.json`);
+  const qs = route.match(/^\/results\/([^/]+)\/questions$/);
+  if (qs) return Object.keys(await demoJson(`content/ask/${qs[1]}.json`));
   const ask = route.match(/^\/results\/([^/]+)\/ask$/);
   if (ask) {
     const answers = await demoJson(`content/ask/${ask[1]}.json`);
-    return { answer: answers[body.question] || "We can’t answer that one from this result.", based_on: [], suggestions: [] };
+    if (answers[body.question]) return { answer: answers[body.question], answerable: true, based_on: [], suggestions: Object.keys(answers) };
+    return { answer: "I can only answer questions about what the satellite images show here. Try one of these:", answerable: false, based_on: [], suggestions: Object.keys(answers) };
   }
   const res = route.match(/^\/results\/([^/]+)$/);
   if (res) return demoJson(`content/results/${res[1]}.json`);
@@ -725,9 +728,9 @@ function renderAnswer() {
       <div class="vbars-x"><span>${dshort(bLast)}</span><span>${dshort(aFirst)}</span></div>
       <span class="hint small">${ratio && ratio > 1.15 ? `${ratio.toFixed(1)} times as much water as ${Math.round((Date.parse(aFirst) - Date.parse(bLast)) / 864e5)} days earlier.` : ratio && ratio < 0.87 ? "There’s less water than before." : "About the same amount of water as before."}</span></section>
   </div>
-  <div>
+  <div id="faqwrap" hidden>
     <section class="frame chartframe faq"><h3>Common questions</h3>
-      <div class="faqlist" id="faq">${["Could rain have caused this?", "How sure can we be?", "What could be wrong?", "Did the water go down anywhere?"].map((q) => `<details data-q="${esc(q)}"><summary>${q}</summary><p class="hint">Loading…</p></details>`).join("")}</div>
+      <div class="faqlist" id="faq"></div>
     </section>
   </div>
   </div>`);
@@ -858,7 +861,14 @@ function chart(id, type, labels, data, colors, horizontal = false) {
 }
 
 // "Common questions": plain answers built from this result's own numbers (no chat, nothing made up)
-function initAssistant() {
+// Only the questions this result's data can answer are shown; with none, the section stays hidden.
+async function initAssistant() {
+  const R = S.result;
+  let qs = [];
+  try { qs = await api(`/results/${R.id}/questions`); } catch (_) { qs = []; }
+  if (S.result !== R || !$("#faq") || !qs.length) return;
+  $("#faq").innerHTML = qs.map((q) => `<details data-q="${esc(q)}"><summary>${esc(q)}</summary><p class="hint">Loading…</p></details>`).join("");
+  $("#faqwrap").hidden = false;
   $$("#faq details").forEach((d) => d.addEventListener("toggle", async () => {
     if (!d.open || d.dataset.done) return;
     d.dataset.done = "1";

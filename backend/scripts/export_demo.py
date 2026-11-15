@@ -25,7 +25,6 @@ sys.path.insert(0, str(ROOT))
 
 from app import assistant, config, resources, sample, store  # noqa: E402
 
-FAQ = ["Could rain have caused this?", "How sure can we be?", "What could be wrong?", "Did the water go down anywhere?"]
 
 
 def load_results():
@@ -108,7 +107,8 @@ def main():
             dst.mkdir(parents=True, exist_ok=True)
             for png in src.glob("*.png"):
                 shutil.copy2(png, dst / png.name)
-        answers = {q: assistant.answer(r, q)["answer"] for q in FAQ}
+        # only the questions this result's data can answer (the demo shows exactly these)
+        answers = {q: a["answer"] for q in assistant.questions(r) if (a := assistant.answer(r, q))["answerable"]}
         (data / "ask" / f"{key}.json").write_text(json.dumps(answers))
         if r is smp:
             continue
